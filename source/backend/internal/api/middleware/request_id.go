@@ -23,4 +23,12 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// GetRequestID obtiene el request id desde el contexto (si existe).
+func GetRequestID(r *http.Request) string {
+	if v, ok := r.Context().Value(RequestIDContextKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
 

@@ -46,6 +46,7 @@ func NewRouter(db *gorm.DB, hub *websocket.Hub) *mux.Router {
 	api := router.PathPrefix("/api/v1").Subrouter()
 
 	// Rutas publicas (sin autenticacion)
+	api.HandleFunc("/health", handlers.Health).Methods("GET", "OPTIONS")
 	api.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
 	api.HandleFunc("/seed", seedHandler.Seed).Methods("POST", "OPTIONS")
 

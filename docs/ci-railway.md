@@ -18,6 +18,20 @@ Crear **3 servicios** apuntando al mismo repo, cada uno con su `Root Directory`:
 - **frontend**: `source/frontend`
 - **backoffice**: `source/backoffice`
 
+## Variables críticas (Front/Backoffice -> Backend)
+
+Este repo asume que **frontend/backoffice NO hablan a `localhost` en producción**.
+
+- Configura en Railway (en `source/frontend` y `source/backoffice`):
+  - `BACKEND_URL=https://<tu-backend>.up.railway.app` (o URL interna)
+  - `NEXT_PUBLIC_BACKEND_URL` (solo si algo necesita usarla en runtime del navegador)
+
+En producción (Railway) se recomienda usar **URL interna**:
+
+- `BACKEND_URL=http://<backend-service>.railway.internal`
+
+Así el proxy de `/api/*` y `/ws` funciona dentro del VPC de Railway y reduces latencia.
+
 ## Build/Start (recomendado)
 
 ### Backend (Go)
@@ -43,6 +57,15 @@ Crear **3 servicios** apuntando al mismo repo, cada uno con su `Root Directory`:
 - **Start**: `npm run start -- -p $PORT`
 - **Env**:
   - `BACKEND_URL` y/o `NEXT_PUBLIC_BACKEND_URL`
+
+## Proxy de API y WebSocket (Next.js)
+
+Para evitar CORS y para que WebSocket funcione desde el dominio del front/backoffice, ambos apps usan `rewrites()`:
+
+- `/api/:path*` -> `${BACKEND_URL}/api/:path*`
+- `/ws` -> `${BACKEND_URL}/ws`
+
+Y el backoffice abre WS contra `wss://<tu-app>/ws` (no `:8080`), que luego es proxied al backend.
 
 ## Conectividad entre servicios (Railway)
 

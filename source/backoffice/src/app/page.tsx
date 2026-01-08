@@ -243,8 +243,8 @@ export default function Backoffice() {
     if (!token) return
 
     const wsUrl = (() => {
-      const host = window.location.hostname || 'localhost'
-      return `ws://${host}:8080/ws`
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      return `${proto}://${window.location.host}/ws`
     })()
 
     let ws: WebSocket | null = null
