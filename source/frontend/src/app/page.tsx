@@ -64,6 +64,7 @@ export default function Home() {
   const [alumnos, setAlumnos] = useState<Alumno[]>([])
   const [horarios, setHorarios] = useState<Horario[]>([])
   const [horarioSeleccionado, setHorarioSeleccionado] = useState<Horario | null>(null)
+  const [vista, setVista] = useState<'horario' | 'clase'>('horario')
   const [estadosTemporales, setEstadosTemporales] = useState<EstadoTemporal[]>([])
   const [diaSeleccionado, setDiaSeleccionado] = useState<number>(() => {
     const jsDay = new Date().getDay() // 0=domingo..6=sabado
@@ -220,6 +221,7 @@ export default function Home() {
     setAlumnos([])
     setHorarios([])
     setHorarioSeleccionado(null)
+    setVista('horario')
   }
 
   const cargarAsistenciaHorarioHoy = async (horarioId: string) => {
@@ -323,6 +325,8 @@ export default function Home() {
     .slice()
     .sort((a, b) => (a.bloque?.numero || 0) - (b.bloque?.numero || 0))
 
+  const diaLabel = diasSemana.find(d => d.id === diaSeleccionado)?.label || ''
+
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
@@ -406,105 +410,144 @@ export default function Home() {
   // Pantalla principal (horario del profesor)
   return (
     <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between' }}>
-        <div>
-          <h1>{usuario.nombre}</h1>
-          <p style={{ color: '#6b7280' }}>
-            {horarioSeleccionado?.curso?.nombre
-              ? `Curso: ${horarioSeleccionado.curso.nombre}`
-              : 'Selecciona un bloque de tu horario para cargar alumnos'}
-          </p>
-        </div>
-        <button
-          onClick={logout}
-          style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer',
-            height: 'fit-content',
-          }}
-        >
-          Cerrar sesion
-        </button>
-      </header>
-
-      {/* Horario semanal (L-V) */}
-      <section style={{ marginBottom: '2rem' }}>
-        <h2>Horario del profesor</h2>
-
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-          {diasSemana.map((d) => (
+      {vista === 'horario' ? (
+        <>
+          <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between' }}>
+            <div>
+              <h1>{usuario.nombre}</h1>
+              <p style={{ color: '#6b7280' }}>Selecciona un bloque para ingresar a la clase.</p>
+            </div>
             <button
-              key={d.id}
-              onClick={() => setDiaSeleccionado(d.id)}
+              onClick={logout}
               style={{
-                padding: '0.5rem 0.9rem',
-                borderRadius: 999,
-                border: '1px solid #e5e7eb',
-                background: diaSeleccionado === d.id ? '#111827' : '#fff',
-                color: diaSeleccionado === d.id ? '#fff' : '#111827',
+                padding: '0.5rem 1rem',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
                 cursor: 'pointer',
-                fontWeight: 800,
+                height: 'fit-content',
               }}
             >
-              {d.label}
+              Cerrar sesion
             </button>
-          ))}
-        </div>
+          </header>
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-          {horariosDia.map((h) => {
-            const selected = horarioSeleccionado?.id === h.id
-            const now = esBloqueActual(h)
-            return (
+          {/* Horario semanal (L-V) */}
+          <section style={{ marginBottom: '2rem' }}>
+            <h2>Horario del profesor</h2>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              {diasSemana.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setDiaSeleccionado(d.id)}
+                  style={{
+                    padding: '0.5rem 0.9rem',
+                    borderRadius: 999,
+                    border: '1px solid #e5e7eb',
+                    background: diaSeleccionado === d.id ? '#111827' : '#fff',
+                    color: diaSeleccionado === d.id ? '#fff' : '#111827',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                  }}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              {horariosDia.map((h) => {
+                const now = esBloqueActual(h)
+                return (
+                  <button
+                    key={h.id}
+                    onClick={async () => {
+                      setHorarioSeleccionado(h)
+                      setVista('clase')
+                      await Promise.all([
+                        cargarAlumnos(h.curso_id),
+                        cargarAsistenciaHorarioHoy(h.id),
+                        cargarEstadosTemporales(),
+                      ])
+                    }}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      backgroundColor: 'white',
+                      color: '#111827',
+                      border: now ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      minWidth: 240,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800 }}>
+                      {diaLabel} · Bloque {h.bloque?.numero} {now ? '• Ahora' : ''}
+                    </div>
+                    <div style={{ fontSize: '0.85rem' }}>
+                      {h.bloque?.hora_inicio} - {h.bloque?.hora_fin}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      {h.asignatura?.nombre || '—'} · {h.curso?.nombre || '—'}
+                    </div>
+                  </button>
+                )
+              })}
+
+              {horarios.length === 0 && (
+                <p style={{ color: '#6b7280' }}>No hay horarios asignados a este profesor.</p>
+              )}
+              {horarios.length > 0 && horariosDia.length === 0 && (
+                <p style={{ color: '#6b7280' }}>No hay bloques para este día.</p>
+              )}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <header style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '1rem' }}>
+            <div style={{ minWidth: 0 }}>
               <button
-                key={h.id}
-                onClick={async () => {
-                  setHorarioSeleccionado(h)
-                  await Promise.all([
-                    cargarAlumnos(h.curso_id),
-                    cargarAsistenciaHorarioHoy(h.id),
-                    cargarEstadosTemporales(),
-                  ])
-                }}
+                onClick={() => setVista('horario')}
                 style={{
-                  padding: '0.75rem 1rem',
-                  backgroundColor: selected ? '#2563eb' : 'white',
-                  color: selected ? 'white' : '#111827',
-                  border: now ? '2px solid #f59e0b' : '1px solid #e5e7eb',
-                  borderRadius: 10,
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: 8,
                   cursor: 'pointer',
-                  minWidth: 220,
-                  textAlign: 'left',
+                  marginBottom: '0.75rem',
+                  fontWeight: 800,
                 }}
               >
-                <div style={{ fontWeight: 800 }}>
-                  Bloque {h.bloque?.numero} {now ? '• Ahora' : ''}
-                </div>
-                <div style={{ fontSize: '0.85rem', opacity: selected ? 0.9 : 1 }}>
-                  {h.bloque?.hora_inicio} - {h.bloque?.hora_fin}
-                </div>
-                <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                  {h.asignatura?.nombre || '—'} · {h.curso?.nombre || '—'}
-                </div>
+                ← Volver al horario
               </button>
-            )
-          })}
+              <h1 style={{ marginBottom: '0.25rem' }}>{usuario.nombre}</h1>
+              <div style={{ color: '#6b7280', fontSize: '0.95rem' }}>
+                {horarioSeleccionado
+                  ? `${diaLabel} · ${horarioSeleccionado.bloque?.hora_inicio}-${horarioSeleccionado.bloque?.hora_fin} · ${horarioSeleccionado.asignatura?.nombre || '—'} · ${horarioSeleccionado.curso?.nombre || '—'}`
+                  : 'Clase'}
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                height: 'fit-content',
+              }}
+            >
+              Cerrar sesion
+            </button>
+          </header>
 
-          {horarios.length === 0 && (
-            <p style={{ color: '#6b7280' }}>No hay horarios asignados a este profesor.</p>
-          )}
-          {horarios.length > 0 && horariosDia.length === 0 && (
-            <p style={{ color: '#6b7280' }}>No hay bloques para este día.</p>
-          )}
-        </div>
-      </section>
-
-      {/* Lista de alumnos */}
-      <section>
+          {/* Lista de alumnos (clase) */}
+          <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>Alumnos ({alumnos.length})</h2>
           <button
@@ -665,6 +708,8 @@ export default function Home() {
           </div>
         )}
       </section>
+        </>
+      )}
     </main>
   )
 }
