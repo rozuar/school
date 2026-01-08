@@ -1,0 +1,11 @@
+claude has una landing page en github en el directorio 
+docs/index.html
+
+andando la demo en la pagina
+
+mediante call.com entregar agenda para una venta
+
+con todo andandoweb, nombres demo, agendamiento
+
+perplexity busca datos de contactos de colegios 
+

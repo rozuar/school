@@ -1,0 +1,13 @@
+.git
+.claude
+.cursor
+**/.next
+**/node_modules
+**/.turbo
+**/.cache
+**/dist
+**/build
+**/*.log
+mobile
+backoffice
+legacy

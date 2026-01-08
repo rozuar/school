@@ -1,0 +1,1 @@
+un alumno ausente tiene un icono de color negro, un alumno con baño y enfermeria su semaforo es amarillo y un alumno con sos y comportamiento grave tiene un icono de color rojo, los iconos debiese ser pequeñas personas no un punto 

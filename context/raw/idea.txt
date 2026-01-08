@@ -1,0 +1,295 @@
+1. Visión general de arquitectura
+Arquitectura modular, orientada a eventos, con separación clara entre:
+Backend de negocio
+Frontends por rol
+Canales de notificación
+Capa de datos
+Infraestructura portable (Railway → GCP)
+
+2. Backend – Go (Golang)
+Rol
+Motor central del sistema. Orquesta conceptos, acciones, reglas y eventos.
+Responsabilidades
+API REST (o REST + eventos).
+Motor de conceptos → acciones → reglas.
+Gestión de asistencia, inasistencias y casos especiales.
+Notificaciones (email / push).
+Autenticación y autorización (RBAC).
+Auditoría y trazabilidad.
+Componentes internos
+API Gateway (Go)
+Rule Engine
+ Evalúa condiciones temporales (semana / mes / reincidencia).
+Event Processor
+ Registra y dispara acciones.
+Notification Service
+Case Management Service (seguimiento social)
+Tecnologías sugeridas
+Framework: Gin o Fiber
+ORM: GORM o sqlc
+Auth: JWT + RBAC
+Validaciones: OpenAPI / Swagger
+
+3. Base de Datos
+Demo (Railway)
+PostgreSQL administrado
+Producción (GCP)
+Cloud SQL (PostgreSQL)
+ o
+AlloyDB (si se busca alto rendimiento)
+Modelo
+Normalizado para operaciones
+Logs y eventos con retención configurable
+
+4. Frontend Profesor / Administrativo – Next.js
+Next.js (App Router)
+Profesor
+Registro de asistencia
+Activación de conceptos
+Estado del curso en tiempo real
+Administrativo / Inspectoría
+Gestión de solicitudes
+Incidentes activos
+Visión operativa diaria
+Características
+Autenticación con roles
+UI orientada a rapidez operativa
+Dashboards con estados visuales (colores / íconos)
+
+5. Backoffice – Next.js (separado)
+Aplicación independiente orientada a gestión y configuración.
+Funcionalidades
+Mantenedor de conceptos
+Mantenedor de acciones
+Mantenedor de reglas
+Gestión de casos especiales
+Reportes institucionales
+KPIs y métricas
+Justificación de separación
+Mayor seguridad
+Distinto ciclo de uso
+Usuarios con mayor privilegio
+
+6. Mobile – nativo android / kotlin 
+Público objetivo
+Inspectores
+Asistente Social
+(Futuro) Apoderados
+Funcionalidades iniciales
+Recepción de alertas push
+Visualización de casos asignados
+Confirmación de acciones en terreno
+Seguimiento de alumnos
+Push notifications
+Demo: Firebase
+GCP: Firebase Cloud Messaging
+
+7. Notificaciones
+Canales
+Email (apoderados)
+Push (inspectores / asistente social)
+In-app (dashboards)
+Demo
+SendGrid / SMTP simple
+Producción GCP
+Cloud Tasks + Pub/Sub
+Firebase Cloud Messaging
+Email transaccional
+
+8. Infraestructura – Demo (Railway)
+Servicios
+Backend Go
+Frontend Next.js (Profesor / Admin)
+Backoffice Next.js
+PostgreSQL
+Redis (opcional para colas)
+Ventajas
+Setup rápido
+Ideal para demo funcional
+CI/CD simple
+
+9. Infraestructura – Producción (GCP)
+Arquitectura recomendada
+Cloud Run
+Backend Go
+Next.js (SSR o static híbrido)
+Cloud SQL / AlloyDB
+Pub/Sub
+Eventos y reglas
+Cloud Tasks
+Acciones diferidas
+Firebase
+Push notifications
+Cloud Logging & Monitoring
+Secret Manager
+Cloud Load Balancer
+IAM + Identity Platform
+
+10. Seguridad y cumplimiento
+RBAC estricto por perfil
+Auditoría completa de eventos
+Cifrado en tránsito y en reposo
+Separación de entornos (demo / prod)
+Cumplimiento normativo educacional (datos sensibles)
+
+11. Roadmap técnico sugerido
+Fase 1 – Demo
+Backend Go básico
+Asistencia + inasistencias
+Notificaciones a apoderados
+Dashboard administrativo
+Railway deploy
+Fase 2 – Piloto
+Motor de reglas completo
+Perfil Asistente Social
+Casos especiales
+Mobile React Native
+Fase 3 – Producción GCP
+Escalabilidad
+Alta disponibilidad
+Observabilidad
+Seguridad avanzada
+Si quieres, el próximo paso natural es:
+definir endpoints del backend,
+diseñar el motor de reglas en pseudo-código,
+o bajar esto a un diagrama de arquitectura formal (C4).
+Indica cuál desarrollamos a continuación.
+escribe el proyecto para que cursor genere un plan y luego la app
+A continuación te dejo el texto del proyecto, redactado explícitamente para que Cursor (o cualquier IDE con agente de planificación) pueda:
+entender el dominio,
+generar un plan de desarrollo estructurado, y luego
+avanzar en la implementación de la aplicación.
+El texto está pensado como PROJECT.md / README inicial, claro, no ambiguo y accionable.Proyecto: Plataforma Digital de Gestión Escolar basada en Conceptos, Acciones y Reglas
+
+1. Objetivo del proyecto
+Diseñar e implementar una plataforma digital para establecimientos educacionales que permita gestionar asistencia, inasistencias, convivencia escolar y seguimiento social, bajo un modelo configurable, trazable y automatizado, alineado con normativas que restringen el uso de celulares en aula.
+El sistema debe desacoplar la lógica normativa del código, permitiendo que cada colegio administre conceptos, acciones y reglas sin requerir cambios de software.
+
+2. Principios de diseño
+Arquitectura modular y orientada a eventos.
+Configuración por mantenedores (no hardcode).
+Trazabilidad completa (auditoría).
+Escalabilidad cloud-first.
+Multi-rol con RBAC estricto.
+Portable: demo en Railway, producción en GCP.
+
+3. Stack tecnológico
+Backend
+Lenguaje: Go (Golang)
+Framework API: Gin o Fiber
+Auth: JWT + RBAC
+Documentación: OpenAPI / Swagger
+Frontend
+Profesor / Administrativo: Next.js
+Backoffice: Next.js (app separada)
+Mobile: React Native
+Base de datos
+PostgreSQL
+Infraestructura
+Demo: Railway
+Producción objetivo: Google Cloud Platform (Cloud Run, Cloud SQL, Pub/Sub)
+
+4. Dominios funcionales
+4.1 Conceptos
+Un Concepto representa un evento estandarizado del establecimiento.
+Ejemplos:
+Alumno necesita ir al baño
+Profesor inicia la clase
+Alumno ausente
+Uso indebido de celular
+Incidente disciplinario
+Los conceptos no ejecutan lógica por sí mismos; actúan como disparadores.
+4.2 Acciones
+Las Acciones son respuestas automáticas configurables asociadas a uno o más conceptos.
+Ejemplos de acciones:
+Cambiar estado visual en dashboard
+Enviar notificación a apoderado
+Crear solicitud para inspectoría
+Registrar anotación en libro digital
+Generar alerta a Asistente Social
+Las acciones deben poder activarse, desactivarse y parametrizarse desde backoffice.
+4.3 Reglas
+Las Reglas definen condiciones temporales o contextuales que disparan acciones.
+Ejemplos:
+2 inasistencias sin justificativo médico en 7 días
+3 inasistencias no consecutivas en 30 días
+Alumno marcado como caso especial inhibe alertas automáticas
+Las reglas deben evaluarse mediante un motor de reglas independiente.
+4.4 Eventos
+Un Evento es la ocurrencia concreta de un concepto para un alumno, curso o clase.
+Cada evento:
+Tiene timestamp
+Tiene origen (profesor, sistema)
+Ejecuta acciones
+Queda registrado en auditoría5. Casos de uso clave
+5.1 Registro de asistencia
+El profesor inicia la clase.
+Registra alumnos presentes y ausentes.
+El sistema genera eventos de inasistencia.
+Se notifica a apoderados.
+Se habilita canal de justificación.
+5.2 Justificación de inasistencia
+Apoderado recibe notificación.
+Puede adjuntar certificado médico o justificación libre.
+El estado de la inasistencia cambia.
+5.3 Seguimiento social
+Reglas detectan inasistencias reiteradas.
+Se genera alerta a Asistente Social.
+El caso queda en monitoreo.
+5.4 Casos especiales
+Alumnos pueden marcarse como casos especiales.
+Inhiben alertas automáticas.
+Siguen siendo monitoreados.
+
+6. Perfiles del sistema
+Backoffice / Dirección
+Profesor
+Administrativo / Inspectoría
+Asistente Social
+(Futuro) Apoderado
+Cada perfil tiene permisos explícitos y dashboards propios.
+
+7. Requerimientos técnicos clave
+RBAC por perfil
+Auditoría completa
+Configuración por mantenedores
+Notificaciones asíncronas
+Soporte multi-establecimiento (futuro)
+Soporte multi-entorno (demo / prod)
+
+8. MVP esperado
+Backend Go con API funcional
+Gestión de conceptos, acciones y reglas
+Registro de asistencia
+Notificaciones por inasistencia
+Perfil Asistente Social
+Dashboard administrativo
+Deploy en Railway
+
+9. Entregables esperados (para Cursor)
+El agente debe:
+Proponer un plan de desarrollo por fases.
+Definir estructura de repositorios.
+Generar modelo de datos inicial.
+Crear endpoints del backend.
+Implementar flujos principales del MVP.
+Preparar scripts de despliegue para Railway.
+Dejar base lista para migración a GCP.
+
+10. Criterio de éxito
+El sistema funciona sin hardcodear reglas.
+Los conceptos pueden modificarse desde backoffice.
+Las acciones se ejecutan correctamente.
+Las alertas se disparan solo cuando corresponde.
+El demo es presentable a un colegio o sostenedor.
+
+11. Nota final para el agente
+Priorizar claridad, simplicidad y extensibilidad.
+ No optimizar prematuramente.
+ Asumir crecimiento futuro del sistema.Gestión académica: Ayuda a las escuelas a simplificar el proceso de inscripción de nuevos estudiantes y la gestión de la información de los estudiantes actuales. También, facilita la creación de horarios de clases, asignación de aulas y distribución del profesorado. Así como también facilita la administración de exámenes, introducción de notas y la generación de informes académicos.
+Gestión administrativa: Puede ayudar a registrar la asistencia de los estudiantes y generar reportes que permitan el seguimiento de la misma. A nivel de personal, administra la información del personal docente y administrativo, la gestión de presupuestos y las nóminas y salarios. Por lo que también puede llevar a cabo el control de las finanzas del colegio, incluyendo el pago de las matrículas, la gestión de presupuestos y las nóminas del personal.
+Comunicación y colaboración : Proporciona acceso a información académica, horarios, boletines y comunicaciones oficiales. Además, facilita la comunicación entre estudiantes, padres y profesores.
+Biblioteca y recursos: A nivel bibliotecario y de recursos, puede automatizar el préstamo y la devolución de libros, así como tener un registro actualizado del inventario.
+las herramientas necesarias para gestionar las actividades del aula, la información de los alumnos y las comunicaciones con los padres. Incluye funciones como la inscripción online, plantillas de lecciones, calificaciones y asignaciones, creación de informes personalizados, y muchas otras funciones. Además, ofrece una solución basada en la nube que permite acceder y gestionar la información en cualquier lugar.
+Automatiza la programación de clases y el seguimiento de la asistencia, a través de funciones como la planificación de lecciones, programador de exámenes, o llevando el seguimiento de cada estudiante, sus notas, las asistencia o si tienen alguna queja.
+Proporciona un portal tanto en línea como para móvil, que conecta a padres, estudiantes y profesores, en una sola plataforma, para facilitar la comunicación entre ellos.

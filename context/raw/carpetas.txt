@@ -1,0 +1,15 @@
+la carpeta context se divide en 
+├── context
+│   ├── raw
+│   └── refined
+└──     source
+    ├── backend
+    │   └── internal
+    ├── backoffice
+    │   ├── node_modules
+    │   └── src
+    ├── frontend
+    │   ├── node_modules
+    │   └── src
+    ├── mobile
+    ...

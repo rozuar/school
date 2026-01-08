@@ -1,0 +1,9 @@
+como funciona un colegio, el colegio tiene alumnos y profesores.
+
+los profesores tienen horarios y ramos, osea imparten un ramo en cierto horario d, entro de una franja horaria de 44 horas maximo  , el maximo pronto seran 40 por ley.
+los alumnos tienen dentro de un horario franjas horarias de todos los ramos seg a un la ley
+ingresan a las 8 con bloques de 45 miuntos con recreos de 15 mins por la tarde talleres despues la hora de colacion.
+
+un profesor esta presente por bloques con curso, osea cada vez que un curso cambia de ramo, se debe retomar la asistencia
+
+

@@ -1,0 +1,1 @@
+que el listado de alumnos use un icono de botones en expansion y de ahi aparezcan los botones con los comportamientos
