@@ -45,6 +45,7 @@ interface Horario {
   bloque_id: string
   dia_semana: number
   asignatura?: { id: string; nombre: string }
+  curso?: { id: string; nombre: string; nivel: string }
   bloque?: BloqueHorario
 }
 
@@ -60,12 +61,15 @@ interface EstadoTemporal {
 export default function Home() {
   const [token, setToken] = useState<string | null>(null)
   const [usuario, setUsuario] = useState<Usuario | null>(null)
-  const [cursos, setCursos] = useState<Curso[]>([])
-  const [cursoSeleccionado, setCursoSeleccionado] = useState<Curso | null>(null)
   const [alumnos, setAlumnos] = useState<Alumno[]>([])
   const [horarios, setHorarios] = useState<Horario[]>([])
   const [horarioSeleccionado, setHorarioSeleccionado] = useState<Horario | null>(null)
   const [estadosTemporales, setEstadosTemporales] = useState<EstadoTemporal[]>([])
+  const [diaSeleccionado, setDiaSeleccionado] = useState<number>(() => {
+    const jsDay = new Date().getDay() // 0=domingo..6=sabado
+    if (jsDay >= 1 && jsDay <= 5) return jsDay // lunes..viernes
+    return 1
+  })
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -116,7 +120,7 @@ export default function Home() {
     try {
       const resp = await axios.get(`${API_URL}/auth/me`)
       setUsuario(resp.data)
-      await cargarCursos()
+      await Promise.all([cargarHorariosMis(), cargarEstadosTemporales()])
     } catch (error) {
       console.error('Error cargando usuario:', error)
       logout()
@@ -125,12 +129,12 @@ export default function Home() {
     }
   }
 
-  const cargarCursos = async () => {
+  const cargarHorariosMis = async () => {
     try {
-      const resp = await axios.get(`${API_URL}/cursos`)
-      setCursos(resp.data || [])
+      const resp = await axios.get(`${API_URL}/horarios/mis`)
+      setHorarios(resp.data || [])
     } catch (error) {
-      console.error('Error cargando cursos:', error)
+      console.error('Error cargando horarios del profesor:', error)
     }
   }
 
@@ -146,15 +150,6 @@ export default function Home() {
       setAsistencia(asistenciaInicial)
     } catch (error) {
       console.error('Error cargando alumnos:', error)
-    }
-  }
-
-  const cargarHorarios = async (cursoId: string) => {
-    try {
-      const resp = await axios.get(`${API_URL}/cursos/${cursoId}/horario`)
-      setHorarios(resp.data || [])
-    } catch (error) {
-      console.error('Error cargando horarios:', error)
     }
   }
 
@@ -180,7 +175,7 @@ export default function Home() {
       axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
       setToken(newToken)
       setUsuario(user)
-      await cargarCursos()
+      await Promise.all([cargarHorariosMis(), cargarEstadosTemporales()])
     } catch (error: any) {
       console.error('Error en login:', error)
       alert(error?.response?.data?.error || 'Error en login')
@@ -208,7 +203,7 @@ export default function Home() {
       axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
       setToken(newToken)
       setUsuario(user)
-      await cargarCursos()
+      await Promise.all([cargarHorariosMis(), cargarEstadosTemporales()])
     } catch (error: any) {
       console.error('Error en login demo:', error)
       alert(error?.response?.data?.error || 'Error en login demo')
@@ -222,19 +217,9 @@ export default function Home() {
     delete axios.defaults.headers.common['Authorization']
     setToken(null)
     setUsuario(null)
-    setCursos([])
-    setCursoSeleccionado(null)
     setAlumnos([])
-  }
-
-  const seleccionarCurso = async (curso: Curso) => {
-    setCursoSeleccionado(curso)
+    setHorarios([])
     setHorarioSeleccionado(null)
-    await Promise.all([
-      cargarAlumnos(curso.id),
-      cargarHorarios(curso.id),
-      cargarEstadosTemporales()
-    ])
   }
 
   const cargarAsistenciaHorarioHoy = async (horarioId: string) => {
@@ -306,6 +291,37 @@ export default function Home() {
       alert(error?.response?.data?.error || 'Error limpiando estado')
     }
   }
+
+  const minutos = (hhmm?: string) => {
+    if (!hhmm) return null
+    const [h, m] = hhmm.split(':').map(Number)
+    if (Number.isNaN(h) || Number.isNaN(m)) return null
+    return h * 60 + m
+  }
+
+  const esBloqueActual = (h: Horario) => {
+    const hoy = new Date()
+    const jsDay = hoy.getDay()
+    if (jsDay !== h.dia_semana) return false
+    const nowMin = hoy.getHours() * 60 + hoy.getMinutes()
+    const ini = minutos(h.bloque?.hora_inicio)
+    const fin = minutos(h.bloque?.hora_fin)
+    if (ini == null || fin == null) return false
+    return nowMin >= ini && nowMin < fin
+  }
+
+  const diasSemana = [
+    { id: 1, label: 'Lunes' },
+    { id: 2, label: 'Martes' },
+    { id: 3, label: 'Miércoles' },
+    { id: 4, label: 'Jueves' },
+    { id: 5, label: 'Viernes' },
+  ]
+
+  const horariosDia = horarios
+    .filter((h) => h.dia_semana === diaSeleccionado)
+    .slice()
+    .sort((a, b) => (a.bloque?.numero || 0) - (b.bloque?.numero || 0))
 
   if (loading) {
     return (
@@ -387,82 +403,16 @@ export default function Home() {
     )
   }
 
-  // Pantalla de seleccion de curso
-  if (!cursoSeleccionado) {
-    return (
-      <div style={{ padding: '2rem', maxWidth: 800, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-          <div>
-            <h1>Bienvenido, {usuario.nombre}</h1>
-            <p style={{ color: '#6b7280' }}>{usuario.rol}</p>
-          </div>
-          <button
-            onClick={logout}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            Cerrar sesion
-          </button>
-        </header>
-
-        <h2>Selecciona un curso</h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '1rem',
-          marginTop: '1rem'
-        }}>
-          {cursos.map(curso => (
-            <button
-              key={curso.id}
-              onClick={() => seleccionarCurso(curso)}
-              style={{
-                padding: '1.5rem',
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{curso.nombre}</div>
-              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                {curso.nivel === 'basica' ? 'Educacion Basica' : 'Educacion Media'}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  // Pantalla principal del curso
+  // Pantalla principal (horario del profesor)
   return (
     <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
       <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between' }}>
         <div>
-          <button
-            onClick={() => setCursoSeleccionado(null)}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#f3f4f6',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              marginBottom: '0.5rem',
-            }}
-          >
-            ← Volver a cursos
-          </button>
-          <h1>{cursoSeleccionado.nombre}</h1>
+          <h1>{usuario.nombre}</h1>
           <p style={{ color: '#6b7280' }}>
-            {cursoSeleccionado.nivel === 'basica' ? 'Educacion Basica' : 'Educacion Media'}
+            {horarioSeleccionado?.curso?.nombre
+              ? `Curso: ${horarioSeleccionado.curso.nombre}`
+              : 'Selecciona un bloque de tu horario para cargar alumnos'}
           </p>
         </div>
         <button
@@ -481,35 +431,74 @@ export default function Home() {
         </button>
       </header>
 
-      {/* Selector de bloque horario */}
+      {/* Horario semanal (L-V) */}
       <section style={{ marginBottom: '2rem' }}>
-        <h2>Bloque Horario</h2>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-          {horarios.map(h => (
+        <h2>Horario del profesor</h2>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+          {diasSemana.map((d) => (
             <button
-              key={h.id}
-              onClick={async () => {
-                setHorarioSeleccionado(h)
-                await cargarAsistenciaHorarioHoy(h.id)
-              }}
+              key={d.id}
+              onClick={() => setDiaSeleccionado(d.id)}
               style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: horarioSeleccionado?.id === h.id ? '#2563eb' : 'white',
-                color: horarioSeleccionado?.id === h.id ? 'white' : '#111827',
+                padding: '0.5rem 0.9rem',
+                borderRadius: 999,
                 border: '1px solid #e5e7eb',
-                borderRadius: 8,
+                background: diaSeleccionado === d.id ? '#111827' : '#fff',
+                color: diaSeleccionado === d.id ? '#fff' : '#111827',
                 cursor: 'pointer',
+                fontWeight: 800,
               }}
             >
-              <div style={{ fontWeight: 600 }}>Bloque {h.bloque?.numero}</div>
-              <div style={{ fontSize: '0.8rem' }}>
-                {h.bloque?.hora_inicio} - {h.bloque?.hora_fin}
-              </div>
-              <div style={{ fontSize: '0.8rem' }}>{h.asignatura?.nombre}</div>
+              {d.label}
             </button>
           ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+          {horariosDia.map((h) => {
+            const selected = horarioSeleccionado?.id === h.id
+            const now = esBloqueActual(h)
+            return (
+              <button
+                key={h.id}
+                onClick={async () => {
+                  setHorarioSeleccionado(h)
+                  await Promise.all([
+                    cargarAlumnos(h.curso_id),
+                    cargarAsistenciaHorarioHoy(h.id),
+                    cargarEstadosTemporales(),
+                  ])
+                }}
+                style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: selected ? '#2563eb' : 'white',
+                  color: selected ? 'white' : '#111827',
+                  border: now ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  minWidth: 220,
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ fontWeight: 800 }}>
+                  Bloque {h.bloque?.numero} {now ? '• Ahora' : ''}
+                </div>
+                <div style={{ fontSize: '0.85rem', opacity: selected ? 0.9 : 1 }}>
+                  {h.bloque?.hora_inicio} - {h.bloque?.hora_fin}
+                </div>
+                <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                  {h.asignatura?.nombre || '—'} · {h.curso?.nombre || '—'}
+                </div>
+              </button>
+            )
+          })}
+
           {horarios.length === 0 && (
-            <p style={{ color: '#6b7280' }}>No hay horarios configurados para este curso</p>
+            <p style={{ color: '#6b7280' }}>No hay horarios asignados a este profesor.</p>
+          )}
+          {horarios.length > 0 && horariosDia.length === 0 && (
+            <p style={{ color: '#6b7280' }}>No hay bloques para este día.</p>
           )}
         </div>
       </section>
@@ -535,7 +524,11 @@ export default function Home() {
           </button>
         </div>
 
-        {alumnos.length === 0 ? (
+        {!horarioSeleccionado ? (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: 8 }}>
+            Selecciona un bloque del horario para ver alumnos y registrar asistencia.
+          </div>
+        ) : alumnos.length === 0 ? (
           <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', borderRadius: 8 }}>
             Sin alumnos en este curso.
           </div>

@@ -68,6 +68,11 @@ func NewRouter(db *gorm.DB, hub *websocket.Hub) *mux.Router {
 	cursosRoutes.HandleFunc("/{id}/alumnos", cursosHandler.GetAlumnos).Methods("GET", "OPTIONS")
 	cursosRoutes.HandleFunc("/{id}/horario", cursosHandler.GetHorario).Methods("GET", "OPTIONS")
 
+	// Horarios del profesor autenticado
+	misHorarios := protected.PathPrefix("").Subrouter()
+	misHorarios.Use(middleware.PermissionMiddleware(auth.PermisoVerCursos))
+	misHorarios.HandleFunc("/horarios/mis", horariosHandler.GetMis).Methods("GET", "OPTIONS")
+
 	// Catalogos
 	catalogos := protected.PathPrefix("").Subrouter()
 	catalogos.Use(middleware.PermissionMiddleware(auth.PermisoVerCursos))

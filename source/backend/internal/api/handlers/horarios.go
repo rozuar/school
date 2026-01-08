@@ -19,6 +19,32 @@ func NewHorariosHandler(db *gorm.DB) *HorariosHandler {
 	return &HorariosHandler{db: db}
 }
 
+// GetMis devuelve el horario del profesor autenticado
+func (h *HorariosHandler) GetMis(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r)
+	if claims == nil {
+		http.Error(w, `{"error":"User not authenticated"}`, http.StatusUnauthorized)
+		return
+	}
+
+	q := h.db.Preload("Asignatura").Preload("Bloque").Preload("Curso")
+
+	// Opcional: filtrar por día
+	if dia := r.URL.Query().Get("dia_semana"); dia != "" {
+		q = q.Where("dia_semana = ?", dia)
+	}
+
+	var horarios []models.Horario
+	if err := q.Where("profesor_id = ?", claims.UserID).
+		Order("dia_semana, bloque_id").
+		Find(&horarios).Error; err != nil {
+		http.Error(w, `{"error":"Error fetching schedules"}`, http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(horarios)
+}
+
 // GetAll lista horarios con filtros opcionales (curso_id, dia_semana)
 func (h *HorariosHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	q := h.db.Preload("Asignatura").Preload("Profesor").Preload("Bloque").Preload("Curso")
