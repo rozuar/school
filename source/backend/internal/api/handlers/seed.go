@@ -75,7 +75,8 @@ func (h *SeedHandler) Seed(w http.ResponseWriter, r *http.Request) {
 				Rut:      generarRut(curso.Nombre, i),
 				Activo:   true,
 			}
-			h.db.FirstOrCreate(&alumno, models.Alumno{Rut: alumno.Rut})
+			// Upsert por RUT para asegurar que el alumno quede asociado al curso correcto
+			h.db.Where("rut = ?", alumno.Rut).Assign(alumno).FirstOrCreate(&alumno)
 		}
 	}
 
