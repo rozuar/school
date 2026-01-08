@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/school-monitoring/backend/internal/auth"
 	"github.com/school-monitoring/backend/internal/models"
@@ -218,14 +220,8 @@ func (h *SeedHandler) Seed(w http.ResponseWriter, r *http.Request) {
 }
 
 func generarRut(curso string, indice int) string {
-	// Generar RUT ficticio basado en curso e indice
-	base := 10000000 + (len(curso) * 100000) + (indice * 1000)
-	return formatRut(base)
-}
-
-func formatRut(numero int) string {
-	// Formato simple: 12345678-9
-	return string(rune('0'+numero%10)) + string(rune('0'+(numero/10)%10)) + "." +
-		string(rune('0'+(numero/100)%10)) + string(rune('0'+(numero/1000)%10)) + string(rune('0'+(numero/10000)%10)) + "." +
-		string(rune('0'+(numero/100000)%10)) + string(rune('0'+(numero/1000000)%10)) + string(rune('0'+(numero/10000000)%10)) + "-K"
+	// RUT demo: debe ser estable y único (hay uniqueIndex en DB).
+	// Usamos un identificador determinístico por curso + índice (no es un RUT real).
+	key := strings.ToUpper(strings.ReplaceAll(curso, " ", ""))
+	return fmt.Sprintf("DEMO-%s-%02d", key, indice+1)
 }
