@@ -17,7 +17,9 @@ const (
 // Evento representa la ocurrencia concreta de un concepto
 type Evento struct {
 	ID            uuid.UUID       `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	ConceptoID    uuid.UUID       `gorm:"type:uuid;not null" json:"concepto_id"`
+	// ConceptoID es nullable para compatibilidad con DBs existentes (migraciones).
+	// A nivel de negocio, los eventos nuevos deben siempre venir con concepto_id.
+	ConceptoID    uuid.UUID       `gorm:"type:uuid;index" json:"concepto_id"`
 	Concepto      *Concepto       `gorm:"foreignKey:ConceptoID" json:"concepto,omitempty"`
 	AlumnoID      *uuid.UUID      `gorm:"type:uuid" json:"alumno_id,omitempty"`
 	Alumno        *Alumno         `gorm:"foreignKey:AlumnoID" json:"alumno,omitempty"`
