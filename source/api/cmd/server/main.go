@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/school-monitoring/backend/internal/api"
@@ -40,7 +41,18 @@ func main() {
 	go notifWorker.Run(stop)
 
 	// Retención (limpieza periódica)
-	go maintenance.RunRetention(db, stop)
+	// Por defecto solo en local (para no ejecutar limpieza en cada deploy).
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	runRetention := appEnv == "local"
+	if v := strings.TrimSpace(os.Getenv("ENABLE_RETENTION_WORKER")); v != "" {
+		runRetention = parseBool(v)
+	}
+	if runRetention {
+		go maintenance.RunRetention(db, stop)
+		log.Println("Retention worker enabled")
+	} else {
+		log.Println("Retention worker disabled")
+	}
 
 	// Crear router
 	router := api.NewRouter(db, hub)
@@ -58,4 +70,9 @@ func main() {
 	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatal("Server error:", err)
 	}
+}
+
+func parseBool(v string) bool {
+	v = strings.ToLower(strings.TrimSpace(v))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
