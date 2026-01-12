@@ -3,20 +3,26 @@
 # Development
 dev:
 	docker-compose up -d db
-	cd source/backend && go run ./cmd/server &
-	cd source/frontend && npm run dev -- --port 3000 &
+	cd source/api && go run ./cmd/server &
+	cd source/web && npm run dev -- --port 3000 &
+	cd source/backoffice && npm run dev -- --port 3001
+
+# Development (sin Docker: asume DATABASE_URL/DB_* ya configuradas)
+dev-nodocker:
+	cd source/api && go run ./cmd/server &
+	cd source/web && npm run dev -- --port 3000 &
 	cd source/backoffice && npm run dev -- --port 3001
 
 # Install dependencies
 install:
-	cd source/backend && go mod download
-	cd source/frontend && npm install
+	cd source/api && go mod download
+	cd source/web && npm install
 	cd source/backoffice && npm install
 
 # Build all
 build:
-	cd source/backend && go build -o ../../dist/server ./cmd/server
-	cd source/frontend && npm run build
+	cd source/api && go build -o ../../dist/server ./cmd/server
+	cd source/web && npm run build
 	cd source/backoffice && npm run build
 
 # Docker
@@ -39,10 +45,10 @@ db-reset:
 
 # Test
 test:
-	cd source/backend && go test ./...
+	cd source/api && go test ./...
 
 # Clean
 clean:
 	rm -rf dist
-	rm -rf source/frontend/.next
+	rm -rf source/web/.next
 	rm -rf source/backoffice/.next

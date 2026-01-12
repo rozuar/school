@@ -14,3 +14,7 @@ go.work# Environment variables
 .vscode/
 *.swp
 *.swo
+
+# Logs / runtime artifacts
+*.log
+*.log.*

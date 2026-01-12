@@ -207,15 +207,15 @@ func (h *SeedHandler) Seed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Seed completed successfully",
-		"usuarios": "7 usuarios creados",
-		"cursos": "12 cursos creados",
-		"alumnos": "120 alumnos creados",
+		"message":     "Seed completed successfully",
+		"usuarios":    "7 usuarios creados",
+		"cursos":      "12 cursos creados",
+		"alumnos":     "120 alumnos creados",
 		"asignaturas": "9 asignaturas creadas",
-		"bloques": "5 bloques horarios creados",
-		"conceptos": "6 conceptos creados",
-		"acciones": "3 acciones creadas",
-		"reglas": "2 reglas creadas",
+		"bloques":     "5 bloques horarios creados",
+		"conceptos":   "6 conceptos creados",
+		"acciones":    "3 acciones creadas",
+		"reglas":      "2 reglas creadas",
 	})
 }
 

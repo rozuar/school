@@ -5,10 +5,11 @@
 ### Reglas de Horario
 - Jornada maxima actual: 44 horas semanales por profesor
 - Jornada maxima futura (por ley): 40 horas semanales
-- Bloques de clase: 45-60 minutos
+- Bloques de clase: 45-60 minutos (depende del establecimiento)
 - Recreos: 15 minutos entre bloques
 - Hora de colacion: 13:00 - 14:00
 - Talleres: Despues de hora de colacion (tarde)
+- Ingreso típico: 8:00 (referencial; el ejemplo de abajo parte a las 9:00)
 
 ### Estructura de Bloques Diarios
 | Bloque | Horario | Tipo |

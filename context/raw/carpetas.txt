@@ -3,13 +3,13 @@ la carpeta context se divide en
 │   ├── raw
 │   └── refined
 └──     source
-    ├── backend
+    ├── api
     │   └── internal
     ├── backoffice
     │   ├── node_modules
     │   └── src
-    ├── frontend
+    ├── web
     │   ├── node_modules
     │   └── src
-    ├── mobile
+    ├── android
     ...

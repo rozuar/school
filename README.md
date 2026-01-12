@@ -7,10 +7,10 @@ Sistema centralizado para **monitor inspectoría** + **interfaz profesor** con s
 ```text
 /school
   /source
-    /backend     Go (API + reglas + WS + persistencia)
-    /frontend    Next.js (profesor)
+    /api         Go (API + reglas + WS + persistencia)
+    /web         Next.js (profesor)
     /backoffice  Next.js (inspectoría/admin)
-    /mobile      React Native (base)
+    /android     App móvil (base)
 ```
 
 ## Quickstart (local)
@@ -24,7 +24,7 @@ docker-compose up -d db
 ### 2) Backend
 
 ```bash
-cd source/backend
+cd source/api
 cp env.example .env
 go run ./cmd/server
 ```
@@ -34,7 +34,7 @@ Backend: `http://localhost:8080` (WS: `ws://localhost:8080/ws`)
 ### 3) Frontend profesor
 
 ```bash
-cd source/frontend
+cd source/web
 cp env.local.example .env.local
 npm install
 npm run dev -- --port 3000

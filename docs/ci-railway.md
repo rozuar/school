@@ -14,15 +14,15 @@ Tener un **pipeline de CI** que valide el monorepo (backend + frontend + backoff
 
 Crear **3 servicios** apuntando al mismo repo, cada uno con su `Root Directory`:
 
-- **backend**: `source/backend`
-- **frontend**: `source/frontend`
+- **api**: `source/api`
+- **web**: `source/web`
 - **backoffice**: `source/backoffice`
 
 ## Variables críticas (Front/Backoffice -> Backend)
 
 Este repo asume que **frontend/backoffice NO hablan a `localhost` en producción**.
 
-- Configura en Railway (en `source/frontend` y `source/backoffice`):
+- Configura en Railway (en `source/web` y `source/backoffice`):
   - `BACKEND_URL=https://<tu-backend>.up.railway.app` (o URL interna)
   - `NEXT_PUBLIC_BACKEND_URL` (solo si algo necesita usarla en runtime del navegador)
 
