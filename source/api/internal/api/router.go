@@ -1,9 +1,8 @@
 package api
 
 import (
-	"net/http"
-
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2"
+	fiberws "github.com/gofiber/websocket/v2"
 	"github.com/school-monitoring/backend/internal/api/handlers"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/auth"
@@ -13,14 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// NewRouter crea y configura el router principal
-func NewRouter(db *gorm.DB, hub *websocket.Hub) *mux.Router {
-	router := mux.NewRouter()
+// NewRouter crea y configura el router principal (Fiber).
+func NewRouter(db *gorm.DB, hub *websocket.Hub) *fiber.App {
+	app := fiber.New()
 
 	// Middleware global
-	router.Use(middleware.RequestIDMiddleware)
-	router.Use(middleware.CORSMiddleware)
-	router.Use(middleware.JSONMiddleware)
+	app.Use(middleware.RequestIDMiddleware)
+	app.Use(middleware.CORSMiddleware)
+	app.Use(middleware.JSONMiddleware)
 
 	// Inicializar handlers
 	orch := orchestrator.New(db, hub)
@@ -43,138 +42,124 @@ func NewRouter(db *gorm.DB, hub *websocket.Hub) *mux.Router {
 	alertasHandler := handlers.NewAlertasHandler(db)
 
 	// API v1
-	api := router.PathPrefix("/api/v1").Subrouter()
+	api := app.Group("/api/v1")
 
 	// Rutas publicas (sin autenticacion)
-	api.HandleFunc("/health", handlers.Health).Methods("GET", "OPTIONS")
-	api.HandleFunc("/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
-	api.HandleFunc("/seed", seedHandler.Seed).Methods("POST", "OPTIONS")
+	api.Get("/health", handlers.Health)
+	api.Post("/auth/login", authHandler.Login)
+	api.Post("/seed", seedHandler.Seed)
 
 	// Rutas protegidas
-	protected := api.PathPrefix("").Subrouter()
-	protected.Use(middleware.AuthMiddleware)
+	protected := api.Group("", middleware.AuthMiddleware)
 
 	// Auth
-	protected.HandleFunc("/auth/logout", authHandler.Logout).Methods("POST", "OPTIONS")
-	protected.HandleFunc("/auth/refresh", authHandler.RefreshToken).Methods("POST", "OPTIONS")
-	protected.HandleFunc("/auth/me", authHandler.Me).Methods("GET", "OPTIONS")
-	protected.HandleFunc("/auth/permisos", authHandler.Permisos).Methods("GET", "OPTIONS")
+	protected.Post("/auth/logout", authHandler.Logout)
+	protected.Post("/auth/refresh", authHandler.RefreshToken)
+	protected.Get("/auth/me", authHandler.Me)
+	protected.Get("/auth/permisos", authHandler.Permisos)
 
 	// Cursos (todos los roles autenticados pueden ver)
-	cursosRoutes := protected.PathPrefix("/cursos").Subrouter()
-	cursosRoutes.Use(middleware.PermissionMiddleware(auth.PermisoVerCursos, auth.PermisoVerAlumnos))
-	cursosRoutes.HandleFunc("", cursosHandler.GetAll).Methods("GET", "OPTIONS")
-	cursosRoutes.HandleFunc("/{id}", cursosHandler.GetByID).Methods("GET", "OPTIONS")
-	cursosRoutes.HandleFunc("/{id}/alumnos", cursosHandler.GetAlumnos).Methods("GET", "OPTIONS")
-	cursosRoutes.HandleFunc("/{id}/horario", cursosHandler.GetHorario).Methods("GET", "OPTIONS")
+	cursosRoutes := protected.Group("/cursos", middleware.PermissionMiddleware(auth.PermisoVerCursos, auth.PermisoVerAlumnos))
+	cursosRoutes.Get("", cursosHandler.GetAll)
+	cursosRoutes.Get("/:id", cursosHandler.GetByID)
+	cursosRoutes.Get("/:id/alumnos", cursosHandler.GetAlumnos)
+	cursosRoutes.Get("/:id/horario", cursosHandler.GetHorario)
 
 	// Horarios del profesor autenticado
-	misHorarios := protected.PathPrefix("").Subrouter()
-	misHorarios.Use(middleware.PermissionMiddleware(auth.PermisoVerCursos))
-	misHorarios.HandleFunc("/horarios/mis", horariosHandler.GetMis).Methods("GET", "OPTIONS")
+	misHorarios := protected.Group("", middleware.PermissionMiddleware(auth.PermisoVerCursos))
+	misHorarios.Get("/horarios/mis", horariosHandler.GetMis)
 
 	// Catalogos
-	catalogos := protected.PathPrefix("").Subrouter()
-	catalogos.Use(middleware.PermissionMiddleware(auth.PermisoVerCursos))
-	catalogos.HandleFunc("/asignaturas", asignaturasHandler.GetAll).Methods("GET", "OPTIONS")
-	catalogos.HandleFunc("/bloques", bloquesHandler.GetAll).Methods("GET", "OPTIONS")
+	catalogos := protected.Group("", middleware.PermissionMiddleware(auth.PermisoVerCursos))
+	catalogos.Get("/asignaturas", asignaturasHandler.GetAll)
+	catalogos.Get("/bloques", bloquesHandler.GetAll)
 
 	// Asistencia
-	asistenciaRoutes := protected.PathPrefix("/asistencia").Subrouter()
-	asistenciaRoutes.Use(middleware.PermissionMiddleware(auth.PermisoRegistrarAsistencia, auth.PermisoVerAsistencia))
-	asistenciaRoutes.HandleFunc("/bloque", asistenciaHandler.RegistrarBloque).Methods("POST", "OPTIONS")
-	asistenciaRoutes.HandleFunc("/curso/{id}/fecha/{fecha}", asistenciaHandler.GetByCursoFecha).Methods("GET", "OPTIONS")
-	asistenciaRoutes.HandleFunc("/horario/{id}/fecha/{fecha}", asistenciaHandler.GetByHorarioFecha).Methods("GET", "OPTIONS")
+	asistenciaRoutes := protected.Group("/asistencia", middleware.PermissionMiddleware(auth.PermisoRegistrarAsistencia, auth.PermisoVerAsistencia))
+	asistenciaRoutes.Post("/bloque", asistenciaHandler.RegistrarBloque)
+	asistenciaRoutes.Get("/curso/:id/fecha/:fecha", asistenciaHandler.GetByCursoFecha)
+	asistenciaRoutes.Get("/horario/:id/fecha/:fecha", asistenciaHandler.GetByHorarioFecha)
 
 	// Estados temporales de alumnos
-	estTemp := protected.PathPrefix("").Subrouter()
-	estTemp.Use(middleware.PermissionMiddleware(auth.PermisoRegistrarAsistencia, auth.PermisoCrearEventos, auth.PermisoVerAsistencia))
-	estTemp.HandleFunc("/alumnos/{id}/estado-temporal", asistenciaHandler.SetEstadoTemporal).Methods("PUT", "OPTIONS")
-	estTemp.HandleFunc("/alumnos/{id}/estado-temporal", asistenciaHandler.ClearEstadoTemporal).Methods("DELETE", "OPTIONS")
-	estTemp.HandleFunc("/estados-temporales", asistenciaHandler.GetEstadosTemporalesActivos).Methods("GET", "OPTIONS")
+	estTemp := protected.Group("", middleware.PermissionMiddleware(auth.PermisoRegistrarAsistencia, auth.PermisoCrearEventos, auth.PermisoVerAsistencia))
+	estTemp.Put("/alumnos/:id/estado-temporal", asistenciaHandler.SetEstadoTemporal)
+	estTemp.Delete("/alumnos/:id/estado-temporal", asistenciaHandler.ClearEstadoTemporal)
+	estTemp.Get("/estados-temporales", asistenciaHandler.GetEstadosTemporalesActivos)
 
 	// Conceptos (backoffice)
-	conceptosRoutes := protected.PathPrefix("/conceptos").Subrouter()
-	conceptosRoutes.HandleFunc("", conceptosHandler.GetAll).Methods("GET", "OPTIONS")
-	conceptosRoutes.HandleFunc("/{id}", conceptosHandler.GetByID).Methods("GET", "OPTIONS")
+	conceptosRoutes := protected.Group("/conceptos")
+	conceptosRoutes.Get("", conceptosHandler.GetAll)
+	conceptosRoutes.Get("/:id", conceptosHandler.GetByID)
 
-	conceptosAdmin := conceptosRoutes.PathPrefix("").Subrouter()
-	conceptosAdmin.Use(middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
-	conceptosAdmin.HandleFunc("", conceptosHandler.Create).Methods("POST", "OPTIONS")
-	conceptosAdmin.HandleFunc("/{id}", conceptosHandler.Update).Methods("PUT", "OPTIONS")
-	conceptosAdmin.HandleFunc("/{id}", conceptosHandler.Delete).Methods("DELETE", "OPTIONS")
+	conceptosAdmin := conceptosRoutes.Group("", middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
+	conceptosAdmin.Post("", conceptosHandler.Create)
+	conceptosAdmin.Put("/:id", conceptosHandler.Update)
+	conceptosAdmin.Delete("/:id", conceptosHandler.Delete)
 
 	// Acciones (backoffice)
-	accionesRoutes := protected.PathPrefix("/acciones").Subrouter()
-	accionesRoutes.HandleFunc("", accionesHandler.GetAll).Methods("GET", "OPTIONS")
-	accionesRoutes.HandleFunc("/{id}", accionesHandler.GetByID).Methods("GET", "OPTIONS")
+	accionesRoutes := protected.Group("/acciones")
+	accionesRoutes.Get("", accionesHandler.GetAll)
+	accionesRoutes.Get("/:id", accionesHandler.GetByID)
 
-	accionesAdmin := accionesRoutes.PathPrefix("").Subrouter()
-	accionesAdmin.Use(middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
-	accionesAdmin.HandleFunc("", accionesHandler.Create).Methods("POST", "OPTIONS")
-	accionesAdmin.HandleFunc("/{id}", accionesHandler.Update).Methods("PUT", "OPTIONS")
-	accionesAdmin.HandleFunc("/{id}", accionesHandler.Delete).Methods("DELETE", "OPTIONS")
+	accionesAdmin := accionesRoutes.Group("", middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
+	accionesAdmin.Post("", accionesHandler.Create)
+	accionesAdmin.Put("/:id", accionesHandler.Update)
+	accionesAdmin.Delete("/:id", accionesHandler.Delete)
 
 	// Reglas (backoffice)
-	reglasRoutes := protected.PathPrefix("/reglas").Subrouter()
-	reglasRoutes.HandleFunc("", reglasHandler.GetAll).Methods("GET", "OPTIONS")
-	reglasRoutes.HandleFunc("/{id}", reglasHandler.GetByID).Methods("GET", "OPTIONS")
+	reglasRoutes := protected.Group("/reglas")
+	reglasRoutes.Get("", reglasHandler.GetAll)
+	reglasRoutes.Get("/:id", reglasHandler.GetByID)
 
-	reglasAdmin := reglasRoutes.PathPrefix("").Subrouter()
-	reglasAdmin.Use(middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
-	reglasAdmin.HandleFunc("", reglasHandler.Create).Methods("POST", "OPTIONS")
-	reglasAdmin.HandleFunc("/{id}", reglasHandler.Update).Methods("PUT", "OPTIONS")
-	reglasAdmin.HandleFunc("/{id}", reglasHandler.Delete).Methods("DELETE", "OPTIONS")
+	reglasAdmin := reglasRoutes.Group("", middleware.RoleMiddleware(models.RolAdmin, models.RolBackoffice))
+	reglasAdmin.Post("", reglasHandler.Create)
+	reglasAdmin.Put("/:id", reglasHandler.Update)
+	reglasAdmin.Delete("/:id", reglasHandler.Delete)
 
 	// Eventos
-	eventosRoutes := protected.PathPrefix("/eventos").Subrouter()
-	eventosRoutes.Use(middleware.PermissionMiddleware(auth.PermisoVerEventos, auth.PermisoCrearEventos, auth.PermisoCerrarEventos))
-	eventosRoutes.HandleFunc("", eventosHandler.GetAll).Methods("GET", "OPTIONS")
-	eventosRoutes.HandleFunc("/activos", eventosHandler.GetActivos).Methods("GET", "OPTIONS")
-	eventosRoutes.HandleFunc("/alumno/{id}", eventosHandler.GetByAlumno).Methods("GET", "OPTIONS")
-	eventosRoutes.HandleFunc("", eventosHandler.Create).Methods("POST", "OPTIONS")
-	eventosRoutes.HandleFunc("/{id}/cerrar", eventosHandler.Cerrar).Methods("PUT", "OPTIONS")
+	eventosRoutes := protected.Group("/eventos", middleware.PermissionMiddleware(auth.PermisoVerEventos, auth.PermisoCrearEventos, auth.PermisoCerrarEventos))
+	eventosRoutes.Get("", eventosHandler.GetAll)
+	eventosRoutes.Get("/activos", eventosHandler.GetActivos)
+	eventosRoutes.Get("/alumno/:id", eventosHandler.GetByAlumno)
+	eventosRoutes.Post("", eventosHandler.Create)
+	eventosRoutes.Put("/:id/cerrar", eventosHandler.Cerrar)
 
 	// Dashboard
-	dash := protected.PathPrefix("").Subrouter()
-	dash.Use(middleware.PermissionMiddleware(auth.PermisoVerReportes, auth.PermisoVerEventos))
-	dash.HandleFunc("/dashboard", dashboardHandler.Get).Methods("GET", "OPTIONS")
+	dash := protected.Group("", middleware.PermissionMiddleware(auth.PermisoVerReportes, auth.PermisoVerEventos))
+	dash.Get("/dashboard", dashboardHandler.Get)
 
 	// Monitor snapshot (inspectoría/admin/backoffice)
-	monitor := protected.PathPrefix("/monitor").Subrouter()
-	monitor.Use(middleware.PermissionMiddleware(auth.PermisoVerMonitor))
-	monitor.HandleFunc("/snapshot", monitorHandler.Snapshot).Methods("GET", "OPTIONS")
+	monitor := protected.Group("/monitor", middleware.PermissionMiddleware(auth.PermisoVerMonitor))
+	monitor.Get("/snapshot", monitorHandler.Snapshot)
 
 	// Alertas operativas (inspectoría/admin/backoffice)
-	alertas := protected.PathPrefix("/alertas").Subrouter()
-	alertas.Use(middleware.PermissionMiddleware(auth.PermisoVerAlertas, auth.PermisoCerrarAlertas))
-	alertas.HandleFunc("", alertasHandler.GetAll).Methods("GET", "OPTIONS")
-	alertas.HandleFunc("/{id}/cerrar", alertasHandler.Cerrar).Methods("PUT", "OPTIONS")
+	alertas := protected.Group("/alertas", middleware.PermissionMiddleware(auth.PermisoVerAlertas, auth.PermisoCerrarAlertas))
+	alertas.Get("", alertasHandler.GetAll)
+	alertas.Put("/:id/cerrar", alertasHandler.Cerrar)
 
 	// Admin (usuarios + horarios)
-	admin := protected.PathPrefix("").Subrouter()
-	admin.Use(middleware.PermissionMiddleware(auth.PermisoAdministrar, auth.PermisoGestionarUsuarios, auth.PermisoGestionarHorarios, auth.PermisoImportarDatos, auth.PermisoVerAuditoria))
+	admin := protected.Group("", middleware.PermissionMiddleware(auth.PermisoAdministrar, auth.PermisoGestionarUsuarios, auth.PermisoGestionarHorarios, auth.PermisoImportarDatos, auth.PermisoVerAuditoria))
 
-	admin.HandleFunc("/usuarios", usuariosHandler.GetAll).Methods("GET", "OPTIONS")
-	admin.HandleFunc("/usuarios/{id}", usuariosHandler.GetByID).Methods("GET", "OPTIONS")
-	admin.HandleFunc("/usuarios", usuariosHandler.Create).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/usuarios/{id}", usuariosHandler.Update).Methods("PUT", "OPTIONS")
+	admin.Get("/usuarios", usuariosHandler.GetAll)
+	admin.Get("/usuarios/:id", usuariosHandler.GetByID)
+	admin.Post("/usuarios", usuariosHandler.Create)
+	admin.Put("/usuarios/:id", usuariosHandler.Update)
 
-	admin.HandleFunc("/horarios", horariosHandler.GetAll).Methods("GET", "OPTIONS")
-	admin.HandleFunc("/horarios", horariosHandler.Upsert).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/horarios/{id}", horariosHandler.Delete).Methods("DELETE", "OPTIONS")
+	admin.Get("/horarios", horariosHandler.GetAll)
+	admin.Post("/horarios", horariosHandler.Upsert)
+	admin.Delete("/horarios/:id", horariosHandler.Delete)
 
 	// Importaciones
-	admin.HandleFunc("/import/horarios", importHandler.ImportHorariosCSV).Methods("POST", "OPTIONS")
+	admin.Post("/import/horarios", importHandler.ImportHorariosCSV)
 
 	// Trazabilidad
-	admin.HandleFunc("/auditorias", trazabilidadHandler.Auditorias).Methods("GET", "OPTIONS")
-	admin.HandleFunc("/acciones-ejecuciones", trazabilidadHandler.AccionesEjecuciones).Methods("GET", "OPTIONS")
+	admin.Get("/auditorias", trazabilidadHandler.Auditorias)
+	admin.Get("/acciones-ejecuciones", trazabilidadHandler.AccionesEjecuciones)
 
 	// WebSocket
-	router.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		websocket.HandleConnections(hub, w, r)
-	})
+	app.Get("/ws", fiberws.New(func(conn *fiberws.Conn) {
+		websocket.HandleConnections(hub, conn)
+	}))
 
-	return router
+	return app
 }

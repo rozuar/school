@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -21,31 +19,27 @@ func NewAccionesHandler(db *gorm.DB) *AccionesHandler {
 }
 
 // GetAll obtiene todas las acciones
-func (h *AccionesHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *AccionesHandler) GetAll(c *fiber.Ctx) error {
 	var acciones []models.Accion
 	if err := h.db.Order("codigo").Find(&acciones).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching actions"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching actions"})
 	}
-	json.NewEncoder(w).Encode(acciones)
+	return c.JSON(acciones)
 }
 
 // GetByID obtiene una accion por ID
-func (h *AccionesHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *AccionesHandler) GetByID(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid action ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid action ID"})
 	}
 
 	var accion models.Accion
 	if err := h.db.First(&accion, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Action not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Action not found"})
 	}
 
-	json.NewEncoder(w).Encode(accion)
+	return c.JSON(accion)
 }
 
 // AccionRequest estructura para crear/actualizar accion
@@ -58,16 +52,14 @@ type AccionRequest struct {
 }
 
 // Create crea una nueva accion
-func (h *AccionesHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *AccionesHandler) Create(c *fiber.Ctx) error {
 	var req AccionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Codigo == "" || req.Nombre == "" || req.Tipo == "" {
-		http.Error(w, `{"error": "Code, name and type are required"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Code, name and type are required"})
 	}
 
 	accion := models.Accion{
@@ -79,33 +71,27 @@ func (h *AccionesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&accion).Error; err != nil {
-		http.Error(w, `{"error": "Error creating action"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating action"})
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(accion)
+	return c.Status(fiber.StatusCreated).JSON(accion)
 }
 
 // Update actualiza una accion
-func (h *AccionesHandler) Update(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *AccionesHandler) Update(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid action ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid action ID"})
 	}
 
 	var accion models.Accion
 	if err := h.db.First(&accion, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Action not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Action not found"})
 	}
 
 	var req AccionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Codigo != "" {
@@ -125,26 +111,22 @@ func (h *AccionesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Save(&accion).Error; err != nil {
-		http.Error(w, `{"error": "Error updating action"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error updating action"})
 	}
 
-	json.NewEncoder(w).Encode(accion)
+	return c.JSON(accion)
 }
 
 // Delete elimina una accion (soft delete)
-func (h *AccionesHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *AccionesHandler) Delete(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid action ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid action ID"})
 	}
 
 	if err := h.db.Delete(&models.Accion{}, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Error deleting action"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error deleting action"})
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"message": "Action deleted"})
+	return c.JSON(fiber.Map{"message": "Action deleted"})
 }

@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -21,58 +18,49 @@ func NewCursosHandler(db *gorm.DB) *CursosHandler {
 }
 
 // GetAll obtiene todos los cursos
-func (h *CursosHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *CursosHandler) GetAll(c *fiber.Ctx) error {
 	var cursos []models.Curso
 	if err := h.db.Order("nivel, nombre").Find(&cursos).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching courses"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching courses"})
 	}
-	json.NewEncoder(w).Encode(cursos)
+	return c.JSON(cursos)
 }
 
 // GetByID obtiene un curso por ID
-func (h *CursosHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *CursosHandler) GetByID(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid course ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid course ID"})
 	}
 
 	var curso models.Curso
 	if err := h.db.First(&curso, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Course not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Course not found"})
 	}
 
-	json.NewEncoder(w).Encode(curso)
+	return c.JSON(curso)
 }
 
 // GetAlumnos obtiene los alumnos de un curso
-func (h *CursosHandler) GetAlumnos(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *CursosHandler) GetAlumnos(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid course ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid course ID"})
 	}
 
 	var alumnos []models.Alumno
 	if err := h.db.Where("curso_id = ? AND activo = ?", id, true).Order("apellido, nombre").Find(&alumnos).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching students"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching students"})
 	}
 
-	json.NewEncoder(w).Encode(alumnos)
+	return c.JSON(alumnos)
 }
 
 // GetHorario obtiene el horario de un curso
-func (h *CursosHandler) GetHorario(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *CursosHandler) GetHorario(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid course ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid course ID"})
 	}
 
 	var horarios []models.Horario
@@ -80,20 +68,17 @@ func (h *CursosHandler) GetHorario(w http.ResponseWriter, r *http.Request) {
 		Where("curso_id = ?", id).
 		Order("dia_semana, bloque_id").
 		Find(&horarios).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching schedule"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching schedule"})
 	}
 
-	json.NewEncoder(w).Encode(horarios)
+	return c.JSON(horarios)
 }
 
 // GetHorarioActual obtiene el horario actual del curso (bloque actual)
-func (h *CursosHandler) GetHorarioActual(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *CursosHandler) GetHorarioActual(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid course ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid course ID"})
 	}
 
 	// Obtener dia de la semana actual (1=lunes, 5=viernes)
@@ -103,9 +88,8 @@ func (h *CursosHandler) GetHorarioActual(w http.ResponseWriter, r *http.Request)
 	if err := h.db.Preload("Asignatura").Preload("Profesor").Preload("Bloque").
 		Where("curso_id = ?", id).
 		First(&horario).Error; err != nil {
-		http.Error(w, `{"error": "No current schedule found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No current schedule found"})
 	}
 
-	json.NewEncoder(w).Encode(horario)
+	return c.JSON(horario)
 }

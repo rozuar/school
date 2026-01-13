@@ -1,32 +1,28 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
-const RequestIDContextKey ContextKey = "request_id"
-
 // RequestIDMiddleware asegura un request id para correlación (logs/headers).
-func RequestIDMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqID := r.Header.Get("X-Request-Id")
-		if reqID == "" {
-			reqID = uuid.New().String()
-		}
+func RequestIDMiddleware(c *fiber.Ctx) error {
+	reqID := c.Get("X-Request-Id")
+	if reqID == "" {
+		reqID = uuid.New().String()
+	}
 
-		w.Header().Set("X-Request-Id", reqID)
-		ctx := context.WithValue(r.Context(), RequestIDContextKey, reqID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	c.Set("X-Request-Id", reqID)
+	c.Locals(LocalsRequestIDKey, reqID)
+	return c.Next()
 }
 
-// GetRequestID obtiene el request id desde el contexto (si existe).
-func GetRequestID(r *http.Request) string {
-	if v, ok := r.Context().Value(RequestIDContextKey).(string); ok {
-		return v
+// GetRequestID obtiene el request id desde locals (si existe).
+func GetRequestID(c *fiber.Ctx) string {
+	if v := c.Locals(LocalsRequestIDKey); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
 	}
 	return ""
 }

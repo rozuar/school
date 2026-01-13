@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/auth"
 	"github.com/school-monitoring/backend/internal/models"
@@ -22,38 +19,34 @@ func NewUsuariosHandler(db *gorm.DB) *UsuariosHandler {
 }
 
 // GetAll obtiene usuarios, con filtros opcionales (rol, activo)
-func (h *UsuariosHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *UsuariosHandler) GetAll(c *fiber.Ctx) error {
 	query := h.db.Model(&models.Usuario{})
 
-	if rol := r.URL.Query().Get("rol"); rol != "" {
+	if rol := c.Query("rol"); rol != "" {
 		query = query.Where("rol = ?", rol)
 	}
-	if activo := r.URL.Query().Get("activo"); activo != "" {
+	if activo := c.Query("activo"); activo != "" {
 		query = query.Where("activo = ?", activo == "true")
 	}
 
 	var usuarios []models.Usuario
 	if err := query.Order("rol, nombre").Find(&usuarios).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching users"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching users"})
 	}
-	json.NewEncoder(w).Encode(usuarios)
+	return c.JSON(usuarios)
 }
 
-func (h *UsuariosHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *UsuariosHandler) GetByID(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error":"Invalid user ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
 	var usuario models.Usuario
 	if err := h.db.First(&usuario, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error":"User not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
-	json.NewEncoder(w).Encode(usuario)
+	return c.JSON(usuario)
 }
 
 type UsuarioRequest struct {
@@ -64,22 +57,19 @@ type UsuarioRequest struct {
 	Activo   *bool   `json:"activo,omitempty"`
 }
 
-func (h *UsuariosHandler) Create(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *UsuariosHandler) Create(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
 	var req UsuarioRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Email == "" || req.Nombre == "" || req.Rol == "" {
-		http.Error(w, `{"error":"email, nombre y rol son requeridos"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "email, nombre y rol son requeridos"})
 	}
 	if !models.EsRolValido(req.Rol) {
-		http.Error(w, `{"error":"rol invalido"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "rol invalido"})
 	}
 
 	pass := "changeme123"
@@ -88,8 +78,7 @@ func (h *UsuariosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := auth.HashPassword(pass)
 	if err != nil {
-		http.Error(w, `{"error":"Error hashing password"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error hashing password"})
 	}
 
 	usuario := models.Usuario{
@@ -104,8 +93,7 @@ func (h *UsuariosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&usuario).Error; err != nil {
-		http.Error(w, `{"error":"Error creating user"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating user"})
 	}
 	_ = models.CrearAuditoria(h.db, "usuarios", usuario.ID, models.AuditoriaInsert, nil, &usuario, func() *uuid.UUID {
 		if claims == nil {
@@ -114,31 +102,26 @@ func (h *UsuariosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return &claims.UserID
 	}())
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(usuario)
+	return c.Status(fiber.StatusCreated).JSON(usuario)
 }
 
-func (h *UsuariosHandler) Update(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *UsuariosHandler) Update(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error":"Invalid user ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
 	var usuario models.Usuario
 	if err := h.db.First(&usuario, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error":"User not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 	before := usuario
 
 	var req UsuarioRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Email != "" {
@@ -149,8 +132,7 @@ func (h *UsuariosHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Rol != "" {
 		if !models.EsRolValido(req.Rol) {
-			http.Error(w, `{"error":"rol invalido"}`, http.StatusBadRequest)
-			return
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "rol invalido"})
 		}
 		usuario.Rol = req.Rol
 	}
@@ -160,15 +142,13 @@ func (h *UsuariosHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Password != nil && *req.Password != "" {
 		hash, err := auth.HashPassword(*req.Password)
 		if err != nil {
-			http.Error(w, `{"error":"Error hashing password"}`, http.StatusInternalServerError)
-			return
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error hashing password"})
 		}
 		usuario.PasswordHash = hash
 	}
 
 	if err := h.db.Save(&usuario).Error; err != nil {
-		http.Error(w, `{"error":"Error updating user"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error updating user"})
 	}
 
 	_ = models.CrearAuditoria(h.db, "usuarios", usuario.ID, models.AuditoriaUpdate, &before, &usuario, func() *uuid.UUID {
@@ -178,7 +158,7 @@ func (h *UsuariosHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return &claims.UserID
 	}())
 
-	json.NewEncoder(w).Encode(usuario)
+	return c.JSON(usuario)
 }
 
 

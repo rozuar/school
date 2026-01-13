@@ -19,7 +19,7 @@ type Evento struct {
 	ID            uuid.UUID       `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	// ConceptoID es nullable para compatibilidad con DBs existentes (migraciones).
 	// A nivel de negocio, los eventos nuevos deben siempre venir con concepto_id.
-	ConceptoID    uuid.UUID       `gorm:"type:uuid;index" json:"concepto_id"`
+	ConceptoID    *uuid.UUID      `gorm:"type:uuid" json:"concepto_id,omitempty"`
 	Concepto      *Concepto       `gorm:"foreignKey:ConceptoID" json:"concepto,omitempty"`
 	AlumnoID      *uuid.UUID      `gorm:"type:uuid" json:"alumno_id,omitempty"`
 	Alumno        *Alumno         `gorm:"foreignKey:AlumnoID" json:"alumno,omitempty"`

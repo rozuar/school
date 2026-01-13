@@ -100,9 +100,13 @@ func (o *Orchestrator) CloseEvento(eventoID uuid.UUID, usuarioID uuid.UUID) (*mo
 
 // EvaluateAndExecute evalua reglas activas del concepto del evento y ejecuta acciones si corresponde.
 func (o *Orchestrator) EvaluateAndExecute(tx *gorm.DB, evt *models.Evento, usuarioID *uuid.UUID) error {
+	if evt.ConceptoID == nil || *evt.ConceptoID == uuid.Nil {
+		// Evento sin concepto_id: no hay reglas que evaluar (compat DB vieja)
+		return nil
+	}
 	var reglas []models.Regla
 	if err := tx.Preload("Accion").
-		Where("concepto_id = ? AND activo = ?", evt.ConceptoID, true).
+		Where("concepto_id = ? AND activo = ?", *evt.ConceptoID, true).
 		Find(&reglas).Error; err != nil {
 		return err
 	}
@@ -180,12 +184,18 @@ func (o *Orchestrator) evalRegla(tx *gorm.DB, regla *models.Regla, evt *models.E
 	}
 
 	// Determinar concepto a contar (por defecto el de la regla/evento)
-	conceptoID := evt.ConceptoID
+	conceptoID := uuid.Nil
+	if evt.ConceptoID != nil {
+		conceptoID = *evt.ConceptoID
+	}
 	if cond.ConceptoCodigo != "" {
 		var c models.Concepto
 		if err := tx.First(&c, "codigo = ?", cond.ConceptoCodigo).Error; err == nil {
 			conceptoID = c.ID
 		}
+	}
+	if conceptoID == uuid.Nil {
+		return false, "", nil, nil, detail, nil
 	}
 
 	// Ventana temporal (dias)

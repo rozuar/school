@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 	"strings"
 
@@ -67,7 +66,7 @@ func main() {
 	log.Printf("API available at http://localhost:%s/api/v1", port)
 	log.Printf("WebSocket available at ws://localhost:%s/ws", port)
 
-	if err := http.ListenAndServe(":"+port, router); err != nil {
+	if err := router.Listen(":" + port); err != nil {
 		log.Fatal("Server error:", err)
 	}
 }

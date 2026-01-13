@@ -1,11 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/auth"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
@@ -22,7 +21,7 @@ func NewSeedHandler(db *gorm.DB) *SeedHandler {
 }
 
 // Seed crea datos demo
-func (h *SeedHandler) Seed(w http.ResponseWriter, r *http.Request) {
+func (h *SeedHandler) Seed(c *fiber.Ctx) error {
 	// Crear usuarios
 	adminPassword, _ := auth.HashPassword("admin123")
 	profPassword, _ := auth.HashPassword("profesor123")
@@ -206,7 +205,7 @@ func (h *SeedHandler) Seed(w http.ResponseWriter, r *http.Request) {
 		h.db.FirstOrCreate(&reglas[i], models.Regla{Nombre: reglas[i].Nombre})
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	return c.JSON(fiber.Map{
 		"message":     "Seed completed successfully",
 		"usuarios":    "7 usuarios creados",
 		"cursos":      "12 cursos creados",

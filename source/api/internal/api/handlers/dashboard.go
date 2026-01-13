@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -46,7 +45,7 @@ type EventoPorTipo struct {
 }
 
 // Get obtiene los datos del dashboard
-func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *DashboardHandler) Get(c *fiber.Ctx) error {
 	var response DashboardResponse
 
 	// Total cursos
@@ -100,5 +99,5 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Snapshot de presencia por curso (última asistencia)
 	h.db.Order("updated_at DESC").Find(&response.CursosEstado)
 
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(response)
 }

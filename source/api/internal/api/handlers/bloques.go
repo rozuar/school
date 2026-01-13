@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -16,13 +14,12 @@ func NewBloquesHandler(db *gorm.DB) *BloquesHandler {
 	return &BloquesHandler{db: db}
 }
 
-func (h *BloquesHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *BloquesHandler) GetAll(c *fiber.Ctx) error {
 	var bloques []models.BloqueHorario
 	if err := h.db.Order("numero").Find(&bloques).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching blocks"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching blocks"})
 	}
-	json.NewEncoder(w).Encode(bloques)
+	return c.JSON(bloques)
 }
 
 

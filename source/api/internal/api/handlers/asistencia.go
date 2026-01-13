@@ -2,11 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/models"
 	"github.com/school-monitoring/backend/internal/services/orchestrator"
@@ -38,31 +37,27 @@ type RegistroAlumno struct {
 }
 
 // RegistrarBloque registra la asistencia de un bloque completo
-func (h *AsistenciaHandler) RegistrarBloque(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *AsistenciaHandler) RegistrarBloque(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 	if claims == nil {
-		http.Error(w, `{"error": "User not authenticated"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not authenticated"})
 	}
 
 	var req RegistroAsistenciaRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	// Parsear fecha
 	fecha, err := time.Parse("2006-01-02", req.Fecha)
 	if err != nil {
-		http.Error(w, `{"error": "Invalid date format, use YYYY-MM-DD"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format, use YYYY-MM-DD"})
 	}
 
 	// Verificar que el horario existe
 	var horario models.Horario
 	if err := h.db.First(&horario, "id = ?", req.HorarioID).Error; err != nil {
-		http.Error(w, `{"error": "Schedule not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found"})
 	}
 
 	// Registrar asistencia para cada alumno
@@ -93,8 +88,7 @@ func (h *AsistenciaHandler) RegistrarBloque(w http.ResponseWriter, r *http.Reque
 			Assign(asistencia).
 			FirstOrCreate(&asistencia).Error; err != nil {
 			tx.Rollback()
-			http.Error(w, `{"error": "Error registering attendance"}`, http.StatusInternalServerError)
-			return
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error registering attendance"})
 		}
 
 		// Auditoria basica (no guardamos "antes" real si no existia)
@@ -120,8 +114,9 @@ func (h *AsistenciaHandler) RegistrarBloque(w http.ResponseWriter, r *http.Reque
 					"horario_id": req.HorarioID,
 					"fecha":      req.Fecha,
 				})
+				cid := conceptoInasistencia.ID
 				evt := models.Evento{
-					ConceptoID:    conceptoInasistencia.ID,
+					ConceptoID:    &cid,
 					AlumnoID:      &registro.AlumnoID,
 					CursoID:       &horario.CursoID,
 					Origen:        models.OrigenProfesor,
@@ -204,50 +199,43 @@ func (h *AsistenciaHandler) RegistrarBloque(w http.ResponseWriter, r *http.Reque
 		})
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"message": "Attendance registered successfully"})
+	return c.JSON(fiber.Map{"message": "Attendance registered successfully"})
 }
 
 // GetByHorarioFecha obtiene la asistencia de un bloque (horario) en una fecha
-func (h *AsistenciaHandler) GetByHorarioFecha(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	horarioID, err := uuid.Parse(vars["id"])
+func (h *AsistenciaHandler) GetByHorarioFecha(c *fiber.Ctx) error {
+	horarioID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid schedule ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid schedule ID"})
 	}
 
-	fechaStr := vars["fecha"]
+	fechaStr := c.Params("fecha")
 	fecha, err := time.Parse("2006-01-02", fechaStr)
 	if err != nil {
-		http.Error(w, `{"error": "Invalid date format, use YYYY-MM-DD"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format, use YYYY-MM-DD"})
 	}
 
 	var asistencias []models.Asistencia
 	if err := h.db.Preload("Alumno").
 		Where("horario_id = ? AND fecha = ?", horarioID, fecha).
 		Find(&asistencias).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching attendance"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching attendance"})
 	}
 
-	json.NewEncoder(w).Encode(asistencias)
+	return c.JSON(asistencias)
 }
 
 // GetByCursoFecha obtiene la asistencia de un curso en una fecha
-func (h *AsistenciaHandler) GetByCursoFecha(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	cursoID, err := uuid.Parse(vars["id"])
+func (h *AsistenciaHandler) GetByCursoFecha(c *fiber.Ctx) error {
+	cursoID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid course ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid course ID"})
 	}
 
-	fechaStr := vars["fecha"]
+	fechaStr := c.Params("fecha")
 	fecha, err := time.Parse("2006-01-02", fechaStr)
 	if err != nil {
-		http.Error(w, `{"error": "Invalid date format, use YYYY-MM-DD"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format, use YYYY-MM-DD"})
 	}
 
 	// Obtener horarios del curso
@@ -259,11 +247,10 @@ func (h *AsistenciaHandler) GetByCursoFecha(w http.ResponseWriter, r *http.Reque
 	if err := h.db.Preload("Alumno").Preload("Horario").Preload("Horario.Bloque").Preload("Horario.Asignatura").
 		Where("horario_id IN ? AND fecha = ?", horarioIDs, fecha).
 		Find(&asistencias).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching attendance"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching attendance"})
 	}
 
-	json.NewEncoder(w).Encode(asistencias)
+	return c.JSON(asistencias)
 }
 
 // EstadoTemporalRequest estructura para cambiar estado temporal
@@ -272,39 +259,33 @@ type EstadoTemporalRequest struct {
 }
 
 // SetEstadoTemporal establece un estado temporal para un alumno
-func (h *AsistenciaHandler) SetEstadoTemporal(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *AsistenciaHandler) SetEstadoTemporal(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 	if claims == nil {
-		http.Error(w, `{"error": "User not authenticated"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not authenticated"})
 	}
 
-	vars := mux.Vars(r)
-	alumnoID, err := uuid.Parse(vars["id"])
+	alumnoID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid student ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid student ID"})
 	}
 
 	var req EstadoTemporalRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	// Validar tipo
 	if req.Tipo != models.EstadoTemporalBano &&
 	   req.Tipo != models.EstadoTemporalEnfermeria &&
 	   req.Tipo != models.EstadoTemporalSOS {
-		http.Error(w, `{"error": "Invalid state type"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid state type"})
 	}
 
 	// Verificar que el alumno existe
 	var alumno models.Alumno
 	if err := h.db.First(&alumno, "id = ?", alumnoID).Error; err != nil {
-		http.Error(w, `{"error": "Student not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Student not found"})
 	}
 
 	// Cerrar estados temporales activos del mismo alumno
@@ -321,8 +302,7 @@ func (h *AsistenciaHandler) SetEstadoTemporal(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := h.db.Create(&estado).Error; err != nil {
-		http.Error(w, `{"error": "Error creating temporary state"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating temporary state"})
 	}
 
 	// WS: notificar estado temporal creado
@@ -361,8 +341,9 @@ func (h *AsistenciaHandler) SetEstadoTemporal(w http.ResponseWriter, r *http.Req
 					"estado_temporal_id": estado.ID,
 					"tipo":              req.Tipo,
 				})
+				cid := concepto.ID
 				evt := models.Evento{
-					ConceptoID:    concepto.ID,
+					ConceptoID:    &cid,
 					AlumnoID:      &alumnoID,
 					CursoID:       &alumno.CursoID,
 					Origen:        models.OrigenProfesor,
@@ -375,18 +356,16 @@ func (h *AsistenciaHandler) SetEstadoTemporal(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	json.NewEncoder(w).Encode(estado)
+	return c.JSON(estado)
 }
 
 // ClearEstadoTemporal cierra el estado temporal de un alumno
-func (h *AsistenciaHandler) ClearEstadoTemporal(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *AsistenciaHandler) ClearEstadoTemporal(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
-	vars := mux.Vars(r)
-	alumnoID, err := uuid.Parse(vars["id"])
+	alumnoID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid student ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid student ID"})
 	}
 
 	// Cerrar estados temporales activos
@@ -395,8 +374,7 @@ func (h *AsistenciaHandler) ClearEstadoTemporal(w http.ResponseWriter, r *http.R
 		Update("fin", time.Now())
 
 	if result.Error != nil {
-		http.Error(w, `{"error": "Error clearing temporary state"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error clearing temporary state"})
 	}
 
 	// WS: notificar estado temporal cerrado (por alumno)
@@ -418,18 +396,17 @@ func (h *AsistenciaHandler) ClearEstadoTemporal(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"message": "Temporary state cleared"})
+	return c.JSON(fiber.Map{"message": "Temporary state cleared"})
 }
 
 // GetEstadosTemporalesActivos obtiene los estados temporales activos
-func (h *AsistenciaHandler) GetEstadosTemporalesActivos(w http.ResponseWriter, r *http.Request) {
+func (h *AsistenciaHandler) GetEstadosTemporalesActivos(c *fiber.Ctx) error {
 	var estados []models.EstadoTemporal
 	if err := h.db.Preload("Alumno").Preload("Alumno.Curso").
 		Where("fin IS NULL").
 		Find(&estados).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching temporary states"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching temporary states"})
 	}
 
-	json.NewEncoder(w).Encode(estados)
+	return c.JSON(estados)
 }

@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -33,11 +32,10 @@ type MonitorSnapshot struct {
 	Cursos    []MonitorCurso `json:"cursos"`
 }
 
-func (h *MonitorHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
+func (h *MonitorHandler) Snapshot(c *fiber.Ctx) error {
 	var cursos []models.Curso
 	if err := h.db.Order("nivel, nombre").Find(&cursos).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching courses"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching courses"})
 	}
 
 	// Eventos activos agrupados por curso y severidad
@@ -144,7 +142,7 @@ func (h *MonitorHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(out)
+	return c.JSON(out)
 }
 
 

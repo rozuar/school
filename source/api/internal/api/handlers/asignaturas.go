@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -16,13 +14,12 @@ func NewAsignaturasHandler(db *gorm.DB) *AsignaturasHandler {
 	return &AsignaturasHandler{db: db}
 }
 
-func (h *AsignaturasHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *AsignaturasHandler) GetAll(c *fiber.Ctx) error {
 	var asignaturas []models.Asignatura
 	if err := h.db.Order("nombre").Find(&asignaturas).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching subjects"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching subjects"})
 	}
-	json.NewEncoder(w).Encode(asignaturas)
+	return c.JSON(asignaturas)
 }
 
 

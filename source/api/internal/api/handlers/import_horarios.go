@@ -2,10 +2,9 @@ package handlers
 
 import (
 	"encoding/csv"
-	"encoding/json"
-	"net/http"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/auth"
@@ -43,17 +42,15 @@ type ImportHorariosResponse struct {
 // ImportHorariosCSV importa horarios desde CSV pegado.
 // Formato esperado (con o sin header):
 // curso,dia_semana,bloque_numero,asignatura,profesor_email
-func (h *ImportHandler) ImportHorariosCSV(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *ImportHandler) ImportHorariosCSV(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
 	var req ImportHorariosRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 	if strings.TrimSpace(req.CSV) == "" {
-		http.Error(w, `{"error":"csv es requerido"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "csv es requerido"})
 	}
 
 	defaultPass := strings.TrimSpace(req.DefaultProfesorPassword)
@@ -67,8 +64,7 @@ func (h *ImportHandler) ImportHorariosCSV(w http.ResponseWriter, r *http.Request
 
 	records, err := reader.ReadAll()
 	if err != nil {
-		http.Error(w, `{"error":"CSV invalido"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "CSV invalido"})
 	}
 
 	resp := ImportHorariosResponse{
@@ -229,11 +225,10 @@ func (h *ImportHandler) ImportHorariosCSV(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err != nil {
-		http.Error(w, `{"error":"Error importando horarios"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error importando horarios"})
 	}
 
-	json.NewEncoder(w).Encode(resp)
+	return c.JSON(resp)
 }
 
 func userIDPtr(claims *auth.Claims) *uuid.UUID {

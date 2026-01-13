@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/auth"
 	"github.com/school-monitoring/backend/internal/models"
@@ -33,36 +31,31 @@ type LoginResponse struct {
 }
 
 // Login maneja el login de usuarios
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Email == "" || req.Password == "" {
-		http.Error(w, `{"error": "Email and password required"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email and password required"})
 	}
 
 	// Buscar usuario por email
 	var usuario models.Usuario
 	if err := h.db.Where("email = ? AND activo = ?", req.Email, true).First(&usuario).Error; err != nil {
-		http.Error(w, `{"error": "Invalid credentials"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
 	// Verificar contrasena
 	if !auth.CheckPassword(req.Password, usuario.PasswordHash) {
-		http.Error(w, `{"error": "Invalid credentials"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
 	// Generar token JWT
 	token, err := auth.GenerateToken(&usuario)
 	if err != nil {
-		http.Error(w, `{"error": "Error generating token"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error generating token"})
 	}
 
 	// Responder con token y usuario
@@ -71,60 +64,55 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Usuario: &usuario,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(response)
 }
 
 // Logout maneja el logout (client-side, solo informativo)
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
+func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"message": "Logged out successfully"})
 }
 
 // RefreshToken renueva un token JWT
-func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
 	var req struct {
 		Token string `json:"token"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	newToken, err := auth.RefreshToken(req.Token)
 	if err != nil {
-		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": newToken})
+	return c.JSON(fiber.Map{"token": newToken})
 }
 
 // Me retorna el usuario actual
-func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(middleware.UserContextKey).(*auth.Claims)
-	if !ok {
-		http.Error(w, `{"error": "User not found"}`, http.StatusUnauthorized)
-		return
+func (h *AuthHandler) Me(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
+	if claims == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 	}
 
 	var usuario models.Usuario
 	if err := h.db.First(&usuario, "id = ?", claims.UserID).Error; err != nil {
-		http.Error(w, `{"error": "User not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	json.NewEncoder(w).Encode(usuario)
+	return c.JSON(usuario)
 }
 
 // Permisos retorna permisos del rol actual y matriz rol->permisos
-func (h *AuthHandler) Permisos(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(middleware.UserContextKey).(*auth.Claims)
-	if !ok {
-		http.Error(w, `{"error": "User not found"}`, http.StatusUnauthorized)
-		return
+func (h *AuthHandler) Permisos(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
+	if claims == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	return c.JSON(fiber.Map{
 		"rol":          claims.Rol,
 		"mis_permisos": auth.ObtenerPermisos(claims.Rol),
 		"por_rol":      auth.PermisosPorRol(),

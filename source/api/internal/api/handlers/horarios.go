@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
@@ -20,17 +17,16 @@ func NewHorariosHandler(db *gorm.DB) *HorariosHandler {
 }
 
 // GetMis devuelve el horario del profesor autenticado
-func (h *HorariosHandler) GetMis(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *HorariosHandler) GetMis(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 	if claims == nil {
-		http.Error(w, `{"error":"User not authenticated"}`, http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not authenticated"})
 	}
 
 	q := h.db.Preload("Asignatura").Preload("Bloque").Preload("Curso")
 
 	// Opcional: filtrar por día
-	if dia := r.URL.Query().Get("dia_semana"); dia != "" {
+	if dia := c.Query("dia_semana"); dia != "" {
 		q = q.Where("dia_semana = ?", dia)
 	}
 
@@ -38,30 +34,28 @@ func (h *HorariosHandler) GetMis(w http.ResponseWriter, r *http.Request) {
 	if err := q.Where("profesor_id = ?", claims.UserID).
 		Order("dia_semana, bloque_id").
 		Find(&horarios).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching schedules"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching schedules"})
 	}
 
-	json.NewEncoder(w).Encode(horarios)
+	return c.JSON(horarios)
 }
 
 // GetAll lista horarios con filtros opcionales (curso_id, dia_semana)
-func (h *HorariosHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *HorariosHandler) GetAll(c *fiber.Ctx) error {
 	q := h.db.Preload("Asignatura").Preload("Profesor").Preload("Bloque").Preload("Curso")
 
-	if cursoID := r.URL.Query().Get("curso_id"); cursoID != "" {
+	if cursoID := c.Query("curso_id"); cursoID != "" {
 		q = q.Where("curso_id = ?", cursoID)
 	}
-	if dia := r.URL.Query().Get("dia_semana"); dia != "" {
+	if dia := c.Query("dia_semana"); dia != "" {
 		q = q.Where("dia_semana = ?", dia)
 	}
 
 	var horarios []models.Horario
 	if err := q.Order("curso_id, dia_semana, bloque_id").Find(&horarios).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching schedules"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching schedules"})
 	}
-	json.NewEncoder(w).Encode(horarios)
+	return c.JSON(horarios)
 }
 
 type HorarioRequest struct {
@@ -73,17 +67,15 @@ type HorarioRequest struct {
 }
 
 // Upsert crea o actualiza un horario por (curso_id, dia_semana, bloque_id)
-func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *HorariosHandler) Upsert(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
 	var req HorarioRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 	if req.CursoID == uuid.Nil || req.AsignaturaID == uuid.Nil || req.ProfesorID == uuid.Nil || req.BloqueID == uuid.Nil || req.DiaSemana < 1 || req.DiaSemana > 5 {
-		http.Error(w, `{"error":"curso_id, asignatura_id, profesor_id, bloque_id y dia_semana(1..5) son requeridos"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "curso_id, asignatura_id, profesor_id, bloque_id y dia_semana(1..5) son requeridos"})
 	}
 
 	var existing models.Horario
@@ -91,8 +83,7 @@ func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 		First(&existing).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
-		http.Error(w, `{"error":"Error querying schedule"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error querying schedule"})
 	}
 
 	if err == gorm.ErrRecordNotFound {
@@ -104,8 +95,7 @@ func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 			DiaSemana:    req.DiaSemana,
 		}
 		if err := h.db.Create(&hh).Error; err != nil {
-			http.Error(w, `{"error":"Error creating schedule"}`, http.StatusInternalServerError)
-			return
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating schedule"})
 		}
 		_ = models.CrearAuditoria(h.db, "horarios", hh.ID, models.AuditoriaInsert, nil, &hh, func() *uuid.UUID {
 			if claims == nil {
@@ -114,9 +104,7 @@ func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 			return &claims.UserID
 		}())
 		h.db.Preload("Asignatura").Preload("Profesor").Preload("Bloque").Preload("Curso").First(&hh, "id = ?", hh.ID)
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(hh)
-		return
+		return c.Status(fiber.StatusCreated).JSON(hh)
 	}
 
 	before := existing
@@ -127,8 +115,7 @@ func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	existing.DiaSemana = req.DiaSemana
 
 	if err := h.db.Save(&existing).Error; err != nil {
-		http.Error(w, `{"error":"Error updating schedule"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error updating schedule"})
 	}
 	_ = models.CrearAuditoria(h.db, "horarios", existing.ID, models.AuditoriaUpdate, &before, &existing, func() *uuid.UUID {
 		if claims == nil {
@@ -138,28 +125,24 @@ func (h *HorariosHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	}())
 
 	h.db.Preload("Asignatura").Preload("Profesor").Preload("Bloque").Preload("Curso").First(&existing, "id = ?", existing.ID)
-	json.NewEncoder(w).Encode(existing)
+	return c.JSON(existing)
 }
 
-func (h *HorariosHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *HorariosHandler) Delete(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error":"Invalid schedule ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid schedule ID"})
 	}
 	var horario models.Horario
 	if err := h.db.First(&horario, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error":"Schedule not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Schedule not found"})
 	}
 	before := horario
 
 	if err := h.db.Delete(&horario).Error; err != nil {
-		http.Error(w, `{"error":"Error deleting schedule"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error deleting schedule"})
 	}
 	_ = models.CrearAuditoria(h.db, "horarios", id, models.AuditoriaDelete, &before, nil, func() *uuid.UUID {
 		if claims == nil {
@@ -168,5 +151,5 @@ func (h *HorariosHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return &claims.UserID
 	}())
 
-	json.NewEncoder(w).Encode(map[string]string{"message": "Schedule deleted"})
+	return c.JSON(fiber.Map{"message": "Schedule deleted"})
 }

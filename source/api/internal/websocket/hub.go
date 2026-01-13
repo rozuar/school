@@ -3,9 +3,8 @@ package websocket
 import (
 	"encoding/json"
 	"log"
-	"net/http"
 
-	"github.com/gorilla/websocket"
+	fiberws "github.com/gofiber/websocket/v2"
 )
 
 // Hub mantiene el conjunto de clientes activos y difunde mensajes a los clientes
@@ -77,7 +76,7 @@ type Client struct {
 	hub *Hub
 
 	// La conexion WebSocket
-	conn *websocket.Conn
+	conn *fiberws.Conn
 
 	// Canal con los mensajes a enviar
 	send chan []byte
@@ -93,7 +92,7 @@ func (c *Client) readPump() {
 	for {
 		_, _, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if fiberws.IsUnexpectedCloseError(err, fiberws.CloseGoingAway, fiberws.CloseAbnormalClosure) {
 				log.Printf("WebSocket error: %v", err)
 			}
 			break
@@ -109,11 +108,11 @@ func (c *Client) writePump() {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				c.conn.WriteMessage(fiberws.CloseMessage, []byte{})
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
+			w, err := c.conn.NextWriter(fiberws.TextMessage)
 			if err != nil {
 				return
 			}
@@ -133,22 +132,8 @@ func (c *Client) writePump() {
 	}
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Permitir todas las conexiones en desarrollo
-	},
-}
-
-// HandleConnections maneja las conexiones WebSocket
-func HandleConnections(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
-		return
-	}
-
+// HandleConnections maneja las conexiones WebSocket (Fiber).
+func HandleConnections(hub *Hub, conn *fiberws.Conn) {
 	client := &Client{
 		hub:  hub,
 		conn: conn,

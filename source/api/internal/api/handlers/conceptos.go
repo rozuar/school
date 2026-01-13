@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
 )
@@ -21,31 +18,27 @@ func NewConceptosHandler(db *gorm.DB) *ConceptosHandler {
 }
 
 // GetAll obtiene todos los conceptos
-func (h *ConceptosHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *ConceptosHandler) GetAll(c *fiber.Ctx) error {
 	var conceptos []models.Concepto
 	if err := h.db.Order("codigo").Find(&conceptos).Error; err != nil {
-		http.Error(w, `{"error": "Error fetching concepts"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching concepts"})
 	}
-	json.NewEncoder(w).Encode(conceptos)
+	return c.JSON(conceptos)
 }
 
 // GetByID obtiene un concepto por ID
-func (h *ConceptosHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *ConceptosHandler) GetByID(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid concept ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid concept ID"})
 	}
 
 	var concepto models.Concepto
 	if err := h.db.First(&concepto, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Concept not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Concept not found"})
 	}
 
-	json.NewEncoder(w).Encode(concepto)
+	return c.JSON(concepto)
 }
 
 // ConceptoRequest estructura para crear/actualizar concepto
@@ -57,16 +50,14 @@ type ConceptoRequest struct {
 }
 
 // Create crea un nuevo concepto
-func (h *ConceptosHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *ConceptosHandler) Create(c *fiber.Ctx) error {
 	var req ConceptoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Codigo == "" || req.Nombre == "" {
-		http.Error(w, `{"error": "Code and name are required"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Code and name are required"})
 	}
 
 	concepto := models.Concepto{
@@ -77,33 +68,27 @@ func (h *ConceptosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&concepto).Error; err != nil {
-		http.Error(w, `{"error": "Error creating concept"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating concept"})
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(concepto)
+	return c.Status(fiber.StatusCreated).JSON(concepto)
 }
 
 // Update actualiza un concepto
-func (h *ConceptosHandler) Update(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *ConceptosHandler) Update(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid concept ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid concept ID"})
 	}
 
 	var concepto models.Concepto
 	if err := h.db.First(&concepto, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Concept not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Concept not found"})
 	}
 
 	var req ConceptoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
 	if req.Codigo != "" {
@@ -120,26 +105,22 @@ func (h *ConceptosHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Save(&concepto).Error; err != nil {
-		http.Error(w, `{"error": "Error updating concept"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error updating concept"})
 	}
 
-	json.NewEncoder(w).Encode(concepto)
+	return c.JSON(concepto)
 }
 
 // Delete elimina un concepto (soft delete)
-func (h *ConceptosHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+func (h *ConceptosHandler) Delete(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error": "Invalid concept ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid concept ID"})
 	}
 
 	if err := h.db.Delete(&models.Concepto{}, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error": "Error deleting concept"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error deleting concept"})
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"message": "Concept deleted"})
+	return c.JSON(fiber.Map{"message": "Concept deleted"})
 }

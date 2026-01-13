@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/school-monitoring/backend/internal/api/middleware"
 	"github.com/school-monitoring/backend/internal/models"
 	"gorm.io/gorm"
@@ -21,62 +19,57 @@ func NewAlertasHandler(db *gorm.DB) *AlertasHandler {
 }
 
 // GET /alertas?estado=abierta&prioridad=&curso_id=&limit=&offset=
-func (h *AlertasHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *AlertasHandler) GetAll(c *fiber.Ctx) error {
 	q := h.db.Model(&models.Alerta{})
 
-	if estado := r.URL.Query().Get("estado"); estado != "" {
+	if estado := c.Query("estado"); estado != "" {
 		q = q.Where("estado = ?", estado)
 	}
-	if prioridad := r.URL.Query().Get("prioridad"); prioridad != "" {
+	if prioridad := c.Query("prioridad"); prioridad != "" {
 		q = q.Where("prioridad = ?", prioridad)
 	}
-	if cursoID := r.URL.Query().Get("curso_id"); cursoID != "" {
+	if cursoID := c.Query("curso_id"); cursoID != "" {
 		if id, err := uuid.Parse(cursoID); err == nil {
 			q = q.Where("curso_id = ?", id)
 		}
 	}
 
-	if desde := r.URL.Query().Get("desde"); desde != "" {
+	if desde := c.Query("desde"); desde != "" {
 		if t, err := time.Parse(time.RFC3339, desde); err == nil {
 			q = q.Where("created_at >= ?", t)
 		}
 	}
-	if hasta := r.URL.Query().Get("hasta"); hasta != "" {
+	if hasta := c.Query("hasta"); hasta != "" {
 		if t, err := time.Parse(time.RFC3339, hasta); err == nil {
 			q = q.Where("created_at <= ?", t)
 		}
 	}
 
-	limit := clamp(atoi(r.URL.Query().Get("limit")), 1, 200)
-	offset := clamp(atoi(r.URL.Query().Get("offset")), 0, 1000000)
+	limit := clamp(atoi(c.Query("limit")), 1, 200)
+	offset := clamp(atoi(c.Query("offset")), 0, 1000000)
 
 	var out []models.Alerta
 	if err := q.Order("created_at DESC").Limit(limit).Offset(offset).Find(&out).Error; err != nil {
-		http.Error(w, `{"error":"Error fetching alerts"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error fetching alerts"})
 	}
-	json.NewEncoder(w).Encode(out)
+	return c.JSON(out)
 }
 
 // PUT /alertas/{id}/cerrar
-func (h *AlertasHandler) Cerrar(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r)
+func (h *AlertasHandler) Cerrar(c *fiber.Ctx) error {
+	claims := middleware.GetUserFromContext(c)
 
-	vars := mux.Vars(r)
-	id, err := uuid.Parse(vars["id"])
+	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		http.Error(w, `{"error":"Invalid alert ID"}`, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid alert ID"})
 	}
 
 	var alerta models.Alerta
 	if err := h.db.First(&alerta, "id = ?", id).Error; err != nil {
-		http.Error(w, `{"error":"Alert not found"}`, http.StatusNotFound)
-		return
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Alert not found"})
 	}
 	if alerta.Estado == models.AlertaCerrada {
-		json.NewEncoder(w).Encode(alerta)
-		return
+		return c.JSON(alerta)
 	}
 	before := alerta
 	now := time.Now()
@@ -87,8 +80,7 @@ func (h *AlertasHandler) Cerrar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Save(&alerta).Error; err != nil {
-		http.Error(w, `{"error":"Error closing alert"}`, http.StatusInternalServerError)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Error closing alert"})
 	}
 
 	_ = models.CrearAuditoria(h.db, "alertas", alerta.ID, models.AuditoriaUpdate, &before, &alerta, func() *uuid.UUID {
@@ -98,7 +90,7 @@ func (h *AlertasHandler) Cerrar(w http.ResponseWriter, r *http.Request) {
 		return &claims.UserID
 	}())
 
-	json.NewEncoder(w).Encode(alerta)
+	return c.JSON(alerta)
 }
 
 

@@ -1,32 +1,25 @@
 package middleware
 
 import (
-	"net/http"
+	"github.com/gofiber/fiber/v2"
 )
 
-// CORSMiddleware middleware para manejar CORS
-func CORSMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Configurar headers CORS
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Max-Age", "86400")
+// CORSMiddleware middleware para manejar CORS (Fiber).
+func CORSMiddleware(c *fiber.Ctx) error {
+	c.Set("Access-Control-Allow-Origin", "*")
+	c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+	c.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Request-Id")
+	c.Set("Access-Control-Max-Age", "86400")
 
-		// Manejar preflight requests
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+	if c.Method() == fiber.MethodOptions {
+		return c.SendStatus(fiber.StatusOK)
+	}
 
-		next.ServeHTTP(w, r)
-	})
+	return c.Next()
 }
 
-// JSONMiddleware middleware para establecer Content-Type JSON
-func JSONMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		next.ServeHTTP(w, r)
-	})
+// JSONMiddleware middleware para establecer Content-Type JSON (Fiber).
+func JSONMiddleware(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+	return c.Next()
 }
