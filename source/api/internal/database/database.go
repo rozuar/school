@@ -115,33 +115,41 @@ func Initialize() (*gorm.DB, error) {
 		log.Println("Tables dropped successfully")
 	}
 
-	// Auto-migrate models
-	err = DB.AutoMigrate(
-		&models.Usuario{},
-		&models.Curso{},
-		&models.CursoEstado{},
-		&models.Alumno{},
-		&models.Asignatura{},
-		&models.BloqueHorario{},
-		&models.Horario{},
-		&models.Asistencia{},
-		&models.HorarioAsistenciaEstado{},
-		&models.EstadoTemporal{},
-		&models.Concepto{},
-		&models.Accion{},
-		&models.Regla{},
-		&models.Evento{},
-		&models.AccionEjecucion{},
-		&models.Alerta{},
-		&models.NotificationOutbox{},
-		&models.Auditoria{},
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	// Auto-migrate models (por defecto solo en local, para no bloquear arranque en Railway)
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	autoMigrate := appEnv == "local"
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_MIGRATE"))); v != "" {
+		autoMigrate = v == "1" || v == "true" || v == "yes" || v == "on"
 	}
 
-	log.Println("Database migration completed")
+	if autoMigrate {
+		err = DB.AutoMigrate(
+			&models.Usuario{},
+			&models.Curso{},
+			&models.CursoEstado{},
+			&models.Alumno{},
+			&models.Asignatura{},
+			&models.BloqueHorario{},
+			&models.Horario{},
+			&models.Asistencia{},
+			&models.HorarioAsistenciaEstado{},
+			&models.EstadoTemporal{},
+			&models.Concepto{},
+			&models.Accion{},
+			&models.Regla{},
+			&models.Evento{},
+			&models.AccionEjecucion{},
+			&models.Alerta{},
+			&models.NotificationOutbox{},
+			&models.Auditoria{},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to migrate database: %w", err)
+		}
+		log.Println("Database migration completed")
+	} else {
+		log.Println("AUTO_MIGRATE disabled: skipping DB migrations")
+	}
 
 	return DB, nil
 }

@@ -12,7 +12,7 @@ function backendBase(): string {
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
-  const url = `${backendBase()}/api/v1/demo/login`
+  const url = `${backendBase()}/api/v1/auth/login`
 
   try {
     const resp = await fetch(url, {
